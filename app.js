@@ -795,6 +795,12 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('searchInput').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') searchStock();
     });
+    
+    // 今日推荐操作事件绑定
+    document.getElementById('recBtn').addEventListener('click', () => getTradeRecommendation());
+    document.getElementById('recInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') getTradeRecommendation();
+    });
 
     setInterval(() => {
         loadMarketIndex();
@@ -810,6 +816,9 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('userDropdown').classList.add('hidden');
         }
     });
+    
+    // 添加推荐操作样式
+    addRecommendationStyles();
 });
 
 // ========== 认证状态管理 ==========
@@ -1346,8 +1355,110 @@ function initImageUpload() {
     }
 }
 
-// ========== Grok AI ==========
-async function askGrok() {
+// ========== 今日推荐操作 ==========
+async function getTradeRecommendation() {
+    const input = document.getElementById('recInput').value.trim();
+    const resultDiv = document.getElementById('recResult');
+    
+    if (!input) {
+        resultDiv.innerHTML = '<div class="text-center text-red-500 py-8">请输入股票代码或名称</div>';
+        return;
+    }
+    
+    // 显示加载状态
+    resultDiv.innerHTML = `
+        <div class="flex items-center justify-center gap-2">
+            <div class="loading" style="padding:10px;"></div>
+            <span class="text-gray-600">Grok AI 正在分析 ${input}...</span>
+        </div>
+    `;
+    
+    try {
+        // 先获取股票基本信息（用于获取准确的名称）
+        let stockInfo = input;
+        try {
+            const marketRes = await fetch(`/api/market?symbols=${input}`);
+            const marketData = await marketRes.json();
+            if (marketData.success && marketData.items) {
+                const firstItem = Object.values(marketData.items)[0];
+                if (firstItem) stockInfo = firstItem.name || input;
+            }
+        } catch (e) {
+            // 市场数据获取失败，继续使用原始输入
+        }
+        
+        // 准备 Grok 提示词
+        const prompt = `我输入的是股票代码或名称：${input}。请你分析这只股票，然后直接告诉我，如果是你，你今天的操作是什么？
+
+请从以下选项中选一个，并给出简明理由（不超过3行）：
+1. **买入** - 如果你认为这只股票有上涨潜力
+2. **卖出** - 如果你认为这只股票应该平仓
+3. **持有** - 如果你认为这只股票应该继续持仓
+4. **观望** - 如果你认为这只股票还需要进一步观察
+
+请用以下格式回答：
+【建议】买入/卖出/持有/观望
+【理由】[你的分析理由，不超过3行]`;
+        
+        // 调用 Grok API
+        const response = await fetch('/api/grok', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: prompt })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            const content = data.content;
+            // 格式化输出
+            const formatted = content
+                .replace(/\n\n/g, '</p><p class="mb-3">')
+                .replace(/\n/g, '<br>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-blue-600">$1</strong>')
+                .replace(/【建议】(买入|卖出|持有|观望)/g, '<div class="text-lg font-bold mt-3 mb-2">【建议】<span class="$1-color">$1</span></div>')
+                .replace(/【理由】/g, '<div class="text-sm font-semibold text-gray-700 mt-2">【理由】</div><div class="text-sm text-gray-600 leading-relaxed">');
+            
+            resultDiv.innerHTML = `
+                <div class="space-y-4">
+                    <div class="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4 border border-blue-100">
+                        <div class="text-sm text-gray-600 mb-2">📊 股票分析对象</div>
+                        <div class="text-lg font-bold text-gray-900">${input}</div>
+                    </div>
+                    <div class="bg-white rounded-lg p-4 border border-gray-200">
+                        <div class="flex items-start gap-3">
+                            <div class="flex-shrink-0 w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center mt-0.5">
+                                <span class="text-white text-xs font-bold">G</span>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="text-sm leading-relaxed">${formatted}</div>
+                                <div class="text-xs text-gray-400 mt-3">💡 Grok AI 分析 • ${new Date().toLocaleTimeString('zh-CN')}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else {
+            resultDiv.innerHTML = `<div class="text-center text-red-500 py-8">${data.error || '分析失败，请稍后重试'}</div>`;
+        }
+    } catch (error) {
+        console.error('推荐操作错误:', error);
+        resultDiv.innerHTML = `<div class="text-center text-red-500 py-8">网络错误，请检查连接</div>`;
+    }
+}
+
+// ========== 今日推荐操作 CSS 增强 ==========
+// 在 document.addEventListener('DOMContentLoaded') 中动态添加样式
+function addRecommendationStyles() {
+    const style = document.createElement('style');
+    style.textContent = `
+        .买入-color { color: #ef4444; font-weight: bold; }
+        .卖出-color { color: #22c55e; font-weight: bold; }
+        .持有-color { color: #f59e0b; font-weight: bold; }
+        .观望-color { color: #6b7280; font-weight: bold; }
+    `;
+    document.head.appendChild(style);
+}
     const input = document.getElementById('grokInput');
     const resultDiv = document.getElementById('grokResult');
     const resultContent = document.getElementById('grokResultContent');

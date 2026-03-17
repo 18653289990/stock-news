@@ -246,6 +246,9 @@
             <button class="tab-btn tab-active px-4 py-2 rounded-lg text-sm font-medium transition-all" data-tab="search">
                 🔍 个股查询
             </button>
+            <button class="tab-btn bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-all" data-tab="recommendation">
+                💡 今日推荐操作
+            </button>
             <button class="tab-btn bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-all" data-tab="north">
                 💰 北向资金
             </button>
@@ -273,6 +276,28 @@
                 <div id="searchResult" class="card p-6">
                     <div class="text-center text-gray-400">
                         输入股票代码或名称进行查询
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recommendation Tab -->
+            <div id="recommendationTab" class="tab-panel hidden">
+                <div class="card p-4 mb-4">
+                    <div class="space-y-3">
+                        <label class="block text-sm font-medium text-gray-700">输入股票代码或名称</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="recInput" placeholder="如：600000 或 浦发银行" 
+                                class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <button id="recBtn" class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors whitespace-nowrap">
+                                获取建议
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-500">Grok AI 将分析该股票，为您提供「买入/卖出/持有/观望」建议</p>
+                    </div>
+                </div>
+                <div id="recResult" class="card p-6">
+                    <div class="text-center text-gray-400">
+                        输入股票代码或名称，获取 Grok AI 的交易建议
                     </div>
                 </div>
             </div>
