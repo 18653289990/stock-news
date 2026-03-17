@@ -243,8 +243,11 @@
 
         <!-- Tabs -->
         <div class="flex gap-2 mb-6 overflow-x-auto pb-2">
-            <button class="tab-btn tab-active px-4 py-2 rounded-lg text-sm font-medium transition-all" data-tab="recommendation">
-                💡 今日推荐操作
+            <button class="tab-btn tab-active px-4 py-2 rounded-lg text-sm font-medium transition-all" data-tab="pick">
+                🎯 非要买就选它
+            </button>
+            <button class="tab-btn bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-all" data-tab="recommendation">
+                💡 今日操作
             </button>
             <button class="tab-btn bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-all" data-tab="north">
                 💰 北向资金
@@ -259,6 +262,27 @@
 
         <!-- Tab Content -->
         <div id="tabContent">
+            <!-- Pick Tab：非要买就选它 -->
+            <div id="pickTab" class="tab-panel">
+                <div class="card p-4 mb-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-900">🎯 今日推荐精选</h3>
+                            <p class="text-xs text-gray-500 mt-1">由 Grok AI 精选的10只值得关注的股票</p>
+                        </div>
+                        <button onclick="loadDailyPicks()" class="text-sm text-blue-500 hover:text-blue-600 font-medium">
+                            🔄 刷新
+                        </button>
+                    </div>
+                    <div id="lastUpdateTime" class="text-xs text-gray-400"></div>
+                </div>
+                <div id="pickList" class="space-y-2">
+                    <div class="card p-8">
+                        <div class="loading"></div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Recommendation Tab -->
             <div id="recommendationTab" class="tab-panel hidden">
                 <div class="card p-4 mb-4">

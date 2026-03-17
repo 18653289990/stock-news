@@ -585,6 +585,9 @@ function switchTab(tabName) {
         
         // 加载对应 tab 的数据
         switch(tabName) {
+            case 'pick':
+                loadDailyPicks();
+                break;
             case 'north':
                 loadNorthMoney();
                 break;
@@ -640,7 +643,45 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 添加推荐操作样式
     addRecommendationStyles();
+    
+    // ========== 初始化每日推荐 ==========
+    // 页面加载时自动加载推荐
+    loadDailyPicks();
+    
+    // 设置每日9点更新推荐
+    scheduleDaily9AmUpdate();
 });
+
+// 定时器ID，用于取消之前的定时器
+let dailyUpdateTimerId = null;
+
+// 计划每日9点更新
+function scheduleDaily9AmUpdate() {
+    function checkAndUpdate() {
+        const now = new Date();
+        const hour = now.getHours();
+        const minute = now.getMinutes();
+        
+        // 如果当前时间是9:00-9:01，清空存储的推荐，下次加载会自动调用Grok
+        if (hour === 9 && minute <= 1) {
+            try {
+                localStorage.removeItem('dailyPicks');
+                console.log('每日推荐已清空，准备重新生成');
+            } catch (e) {
+                console.error('清空推荐失败:', e);
+            }
+        }
+    }
+    
+    // 每分钟检查一次是否到达9点
+    if (dailyUpdateTimerId) {
+        clearInterval(dailyUpdateTimerId);
+    }
+    dailyUpdateTimerId = setInterval(checkAndUpdate, 60000); // 每分钟检查一次
+    
+    // 立即检查一次
+    checkAndUpdate();
+}
 
 // ========== 认证状态管理 ==========
 let currentUser = null;
@@ -1384,6 +1425,227 @@ async function askGrok() {
     } catch (error) {
         console.error('Grok API 错误:', error);
         resultContent.innerHTML = `<div class="text-red-500 text-sm">网络错误，请检查连接</div>`;
+    }
+}
+
+// ========== 非要买就选它 - 每日推荐 ==========
+
+// 从localStorage获取今日推荐
+function getDailyPicksFromStorage() {
+    try {
+        const stored = localStorage.getItem('dailyPicks');
+        if (!stored) return null;
+        
+        const data = JSON.parse(stored);
+        const today = new Date().toDateString();
+        
+        // 检查是否是今天的数据
+        if (data.date === today) {
+            return data.picks;
+        }
+        return null;
+    } catch (e) {
+        console.error('获取存储数据失败:', e);
+        return null;
+    }
+}
+
+// 保存推荐到localStorage
+function saveDailyPicksToStorage(picks) {
+    try {
+        const today = new Date().toDateString();
+        const data = {
+            date: today,
+            timestamp: new Date().getTime(),
+            picks: picks
+        };
+        localStorage.setItem('dailyPicks', JSON.stringify(data));
+    } catch (e) {
+        console.error('保存数据失败:', e);
+    }
+}
+
+// 加载每日推荐
+async function loadDailyPicks() {
+    const pickList = document.getElementById('pickList');
+    
+    // 首先尝试从存储中获取今天的推荐
+    let picks = getDailyPicksFromStorage();
+    
+    if (picks) {
+        // 直接显示缓存的推荐
+        renderPicksList(picks);
+        updateLastUpdateTime(picks);
+        return;
+    }
+    
+    // 如果没有缓存，显示加载动画并请求Grok生成推荐
+    pickList.innerHTML = `
+        <div class="card p-8">
+            <div class="flex items-center justify-center gap-2">
+                <div class="loading" style="padding:10px;"></div>
+                <span class="text-gray-600">Grok AI 正在精选今日推荐...</span>
+            </div>
+        </div>
+    `;
+    
+    try {
+        const prompt = `你是一个专业的股票分析师。请根据今天（${new Date().toLocaleDateString('zh-CN')}）的市场情况和热点，给我推荐今天最值得关注的10只股票。
+
+要求：
+1. 必须是真实存在的A股股票
+2. 每只股票必须包含：股票代码（如600000）、股票名称、简短原因（1-2句话）
+3. 按照推荐程度从强到弱排序
+4. 原因需要涵盖技术面或基本面的关键因素
+
+请用以下格式回答（严格按照这个格式）：
+【推荐1】000858 五粮液 - 原因简述，不超过2句话
+【推荐2】600519 贵州茅台 - 原因简述，不超过2句话
+...以此类推到【推荐10】`;
+
+        const response = await fetch('/api/grok', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: prompt, model: 'grok-4-latest' })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // 解析Grok返回的内容
+            const picks = parseGrokPicks(data.content);
+            
+            if (picks && picks.length > 0) {
+                // 保存到localStorage
+                saveDailyPicksToStorage(picks);
+                // 显示推荐列表
+                renderPicksList(picks);
+                updateLastUpdateTime(picks);
+            } else {
+                pickList.innerHTML = `
+                    <div class="card p-8">
+                        <div class="text-center text-red-500">
+                            解析推荐失败，请稍后重试
+                        </div>
+                    </div>
+                `;
+            }
+        } else {
+            pickList.innerHTML = `
+                <div class="card p-8">
+                    <div class="text-center text-red-500">
+                        生成推荐失败：${data.error || '未知错误'}
+                    </div>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('加载推荐失败:', error);
+        pickList.innerHTML = `
+            <div class="card p-8">
+                <div class="text-center text-red-500">
+                    网络错误，请检查连接
+                </div>
+            </div>
+        `;
+    }
+}
+
+// 解析Grok返回的推荐内容
+function parseGrokPicks(content) {
+    try {
+        const picks = [];
+        // 匹配【推荐N】xxx xxx - 原因 这样的格式
+        const regex = /【推荐\d+】\s*(\d{6})\s+(.+?)\s*[-－—]\s*(.+?)(?=【推荐|\n$|$)/g;
+        let match;
+        
+        while ((match = regex.exec(content)) !== null) {
+            const code = match[1];
+            const name = match[2].trim();
+            const reason = match[3].trim();
+            
+            picks.push({
+                code: code,
+                name: name,
+                reason: reason
+            });
+        }
+        
+        return picks.length > 0 ? picks : null;
+    } catch (e) {
+        console.error('解析推荐失败:', e);
+        return null;
+    }
+}
+
+// 渲染推荐列表
+function renderPicksList(picks) {
+    const pickList = document.getElementById('pickList');
+    
+    if (!picks || picks.length === 0) {
+        pickList.innerHTML = `
+            <div class="card p-8">
+                <div class="text-center text-gray-500">
+                    暂无推荐数据
+                </div>
+            </div>
+        `;
+        return;
+    }
+    
+    const picksHTML = picks.map((pick, index) => `
+        <div class="card p-3 md:p-4 hover:shadow-md transition-shadow">
+            <div class="flex items-start justify-between gap-4">
+                <div class="flex items-start gap-3 flex-1">
+                    <div class="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center font-bold text-sm">
+                        ${index + 1}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-baseline gap-2 mb-1">
+                            <span class="text-sm font-bold text-gray-900">${pick.name}</span>
+                            <span class="text-xs text-gray-500 font-mono">${pick.code}</span>
+                        </div>
+                        <p class="text-xs text-gray-600 leading-relaxed break-words">${pick.reason}</p>
+                    </div>
+                </div>
+                <div class="flex-shrink-0">
+                    <button onclick="addToFavoritesAndNavigate('${pick.code}', '${pick.name}')" 
+                        class="text-blue-500 hover:text-blue-600 text-sm font-medium whitespace-nowrap">
+                        📊 查看
+                    </button>
+                </div>
+            </div>
+        </div>
+    `).join('');
+    
+    pickList.innerHTML = picksHTML;
+}
+
+// 更新最后更新时间
+function updateLastUpdateTime(picks) {
+    const stored = getDailyPicksFromStorage();
+    if (stored && stored.timestamp) {
+        const date = new Date(stored.timestamp);
+        const timeStr = date.toLocaleTimeString('zh-CN', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+        const updateEl = document.getElementById('lastUpdateTime');
+        if (updateEl) {
+            updateEl.textContent = `最后更新于: ${timeStr}`;
+        }
+    }
+}
+
+// 添加到收藏并导航到推荐操作
+function addToFavoritesAndNavigate(code, name) {
+    // 先切换到今日操作tab
+    switchTab('recommendation');
+    // 填充搜索框
+    const recInput = document.getElementById('recInput');
+    if (recInput) {
+        recInput.value = code;
     }
 }
 
