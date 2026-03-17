@@ -75,7 +75,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         model: model,
         messages: [
-          { role: 'system', content: '你是一个专业的财经分析助手。请用中文回答。' },
+          { role: 'system', content: '你是 Grok，一个乐于助人的 AI 助手。请用中文回答。' },
           { role: 'user', content: userContent }
         ],
         temperature: 0.7,

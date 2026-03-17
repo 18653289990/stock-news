@@ -986,7 +986,16 @@ function initImageUpload() {
     const preview = document.getElementById('imagePreview');
     const placeholder = document.getElementById('uploadPlaceholder');
     const removeBtn = document.getElementById('removeImageBtn');
-    
+    const imageToggle = document.getElementById('grokImageToggle');
+    const imageBar = document.getElementById('grokImageBar');
+
+    // 图片区折叠按钮
+    imageToggle.addEventListener('click', () => {
+        const hidden = imageBar.classList.toggle('hidden');
+        imageToggle.classList.toggle('border-purple-400', !hidden);
+        imageToggle.classList.toggle('text-purple-500', !hidden);
+    });
+
     // 点击上传
     dropZone.addEventListener('click', () => imageInput.click());
     
@@ -1016,20 +1025,17 @@ function initImageUpload() {
         }
     });
     
-    // 粘贴上传
+    // 粘贴上传（全局监听，不限 Tab）
     document.addEventListener('paste', (e) => {
-        // 只在 Grok Tab 激活时处理粘贴
-        const grokTab = document.getElementById('grokTab');
-        if (grokTab.classList.contains('hidden')) return;
-        
         const items = e.clipboardData?.items;
         if (!items) return;
-        
         for (let item of items) {
             if (item.type.startsWith('image/')) {
                 e.preventDefault();
-                const file = item.getAsFile();
-                handleImageFile(file);
+                // 自动展开图片区
+                imageBar.classList.remove('hidden');
+                imageToggle.classList.add('border-purple-400', 'text-purple-500');
+                handleImageFile(item.getAsFile());
                 break;
             }
         }
@@ -1043,28 +1049,20 @@ function initImageUpload() {
     
     // 处理图片文件
     function handleImageFile(file) {
-        // 检查文件类型
         if (!file.type.match(/^image\/(jpeg|png|jpg)$/)) {
             alert('请上传 JPG 或 PNG 格式的图片');
             return;
         }
-        
-        // 检查文件大小 (20MB)
         if (file.size > 20 * 1024 * 1024) {
             alert('图片大小不能超过 20MB');
             return;
         }
-        
         const reader = new FileReader();
         reader.onload = (e) => {
             const dataUrl = e.target.result;
-            
-            // 显示预览
             preview.src = dataUrl;
             previewContainer.classList.remove('hidden');
             placeholder.classList.add('hidden');
-            
-            // 保存 base64 数据 (去掉 data:image/xxx;base64, 前缀)
             currentImageBase64 = dataUrl.split(',')[1];
             currentImageType = file.type === 'image/png' ? 'png' : 'jpeg';
         };
@@ -1084,42 +1082,32 @@ function initImageUpload() {
 async function askGrok() {
     const input = document.getElementById('grokInput');
     const resultDiv = document.getElementById('grokResult');
+    const resultContent = document.getElementById('grokResultContent');
     const message = input.value.trim();
     
     if (!message && !currentImageBase64) {
-        resultDiv.innerHTML = '<div class="text-center text-gray-400">请输入问题或上传图片</div>';
+        input.focus();
         return;
     }
     
-    // 显示加载状态
-    resultDiv.innerHTML = `
-        <div class="flex items-center gap-3">
-            <div class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                <span class="text-purple-500">🤖</span>
-            </div>
-            <div class="flex-1">
-                <div class="text-sm text-gray-500 mb-1">Grok AI 正在思考...</div>
-                <div class="loading" style="padding: 10px;"></div>
-            </div>
+    // 展开结果区，显示加载
+    resultDiv.classList.remove('hidden');
+    resultContent.innerHTML = `
+        <div class="flex items-center gap-2 text-gray-400 text-sm">
+            <div class="loading" style="padding:6px;"></div>
+            <span>Grok AI 正在思考…</span>
         </div>
     `;
     
     try {
         let response;
-        
         if (currentImageBase64) {
-            // 有图片：必须用 POST，base64 数据太大无法放 URL
             response = await fetch('/api/grok', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    message: message,
-                    image: currentImageBase64,
-                    imageType: currentImageType
-                })
+                body: JSON.stringify({ message, image: currentImageBase64, imageType: currentImageType })
             });
         } else {
-            // 纯文本：用 GET
             const params = new URLSearchParams();
             params.append('message', message);
             response = await fetch('/api/grok?' + params.toString());
@@ -1128,44 +1116,30 @@ async function askGrok() {
         const data = await response.json();
         
         if (data.success) {
-            // 格式化回答（简单的 markdown 转 HTML）
             let content = data.content
-                .replace(/\n\n/g, '</p><p class="mb-3">')
+                .replace(/\n\n/g, '</p><p class="mb-2">')
                 .replace(/\n/g, '<br>')
                 .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                 .replace(/\*(.*?)\*/g, '<em>$1</em>');
             
-            resultDiv.innerHTML = `
-                <div class="flex items-start gap-3">
-                    <div class="flex-shrink-0 w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center">
-                        <span class="text-white text-sm">G</span>
+            resultContent.innerHTML = `
+                <div class="flex items-start gap-2">
+                    <div class="flex-shrink-0 w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center mt-0.5">
+                        <span class="text-white text-xs font-bold">G</span>
                     </div>
-                    <div class="flex-1">
-                        <div class="text-sm text-gray-500 mb-2">Grok AI · ${data.model}</div>
-                        <div class="text-gray-800 leading-relaxed">
-                            <p class="mb-3">${content}</p>
-                        </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="mb-2">${content}</p>
+                        <div class="text-xs text-gray-400 mt-2">${data.model}</div>
                     </div>
                 </div>
             `;
-            
-            // 清空输入框
             input.value = '';
         } else {
-            resultDiv.innerHTML = `
-                <div class="text-center text-red-500 py-4">
-                    <div class="text-2xl mb-2">❌</div>
-                    <div>${data.error || '请求失败，请稍后重试'}</div>
-                </div>
-            `;
+            resultContent.innerHTML = `<div class="text-red-500 text-sm">${data.error || '请求失败，请稍后重试'}</div>`;
         }
     } catch (error) {
         console.error('Grok API 错误:', error);
-        resultDiv.innerHTML = `
-            <div class="text-center text-red-500 py-4">
-                <div class="text-2xl mb-2">❌</div>
-                <div>网络错误，请检查连接</div>
-            </div>
-        `;
+        resultContent.innerHTML = `<div class="text-red-500 text-sm">网络错误，请检查连接</div>`;
     }
 }
+
