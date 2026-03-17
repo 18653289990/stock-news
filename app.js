@@ -1220,7 +1220,6 @@ async function getTradeRecommendation() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ message: prompt, model: 'grok-4.2' })
         });
-        });
         
         const data = await response.json();
         
