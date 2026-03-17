@@ -264,7 +264,7 @@ async function loadRanking(type = 'up') {
                 const favored = isFavorited(tsCode);
                 
                 return `
-                    <tr class="hover:bg-gray-50 cursor-pointer" onclick="searchStock('${code}')">
+                    <tr class="hover:bg-gray-50">
                         <td class="px-4 py-3">
                             <div class="font-medium text-gray-900">${name}</div>
                             <div class="text-xs text-gray-400">${code}</div>
@@ -301,208 +301,6 @@ function tsCodeToQQSymbol(tsCode) {
     if (market === 'SZ') return 'sz' + code;
     if (market === 'BJ') return 'bj' + code;
     return 'sh' + code;
-}
-
-async function searchStock(code = null) {
-    const input = document.getElementById('searchInput');
-    let searchCode = code || input.value.trim();
-    
-    if (!searchCode) {
-        alert('请输入股票代码');
-        return;
-    }
-    
-    if (/^\d+$/.test(searchCode)) {
-        if (searchCode.startsWith('6')) {
-            searchCode = searchCode + '.SH';
-        } else if (searchCode.startsWith('3') || searchCode.startsWith('0')) {
-            searchCode = searchCode + '.SZ';
-        } else if (searchCode.startsWith('4') || searchCode.startsWith('8')) {
-            searchCode = searchCode + '.BJ';
-        }
-    }
-
-    const resultDiv = document.getElementById('searchResult');
-    resultDiv.innerHTML = '<div class="loading"></div>';
-
-    switchTab('search');
-
-    // 优先使用腾讯行情接口（更快）
-    try {
-        const qqSymbol = tsCodeToQQSymbol(searchCode);
-        const res = await fetch(`/api/market?symbols=${qqSymbol}`);
-        const data = await res.json();
-
-        if (data.success && data.items && data.items[qqSymbol]) {
-            const item = data.items[qqSymbol];
-            const name = item.name || searchCode;
-            const close = item.price;
-            const change = item.change;
-            const pctChg = item.pctChg;
-            const open = item.open;
-            const high = item.high;
-            const low = item.low;
-            const preClose = item.preClose;
-            const vol = item.vol;
-            const amount = item.amount;
-            const favored = isFavorited(searchCode);
-
-            resultDiv.innerHTML = `
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
-                    <div>
-                        <div class="text-sm text-gray-500 mb-1">股票名称</div>
-                        <div class="flex items-center gap-2">
-                            <div class="text-xl font-bold text-gray-900">${name}</div>
-                            <button class="fav-btn text-xl ${favored ? 'favorited' : ''}" data-code="${searchCode}"
-                                onclick="${favored ? `removeFavorite('${searchCode}','${name}')` : `addFavorite('${searchCode}','${name}')`}"
-                                title="${favored ? '取消收藏' : '收藏此股票'}">
-                                ${favored ? '⭐' : '☆'}
-                            </button>
-                        </div>
-                        <div class="text-sm text-gray-400">${searchCode.split('.')[0]}</div>
-                    </div>
-                    <div>
-                        <div class="text-sm text-gray-500 mb-1">最新价</div>
-                        <div class="text-2xl font-bold ${pctChg >= 0 ? 'stock-up' : 'stock-down'}">${formatNumber(close)}</div>
-                    </div>
-                    <div>
-                        <div class="text-sm text-gray-500 mb-1">涨跌幅</div>
-                        <div class="text-xl font-semibold ${pctChg >= 0 ? 'stock-up' : 'stock-down'}">${pctChg >= 0 ? '+' : ''}${formatNumber(pctChg)}%</div>
-                    </div>
-                    <div>
-                        <div class="text-sm text-gray-500 mb-1">涨跌额</div>
-                        <div class="text-xl font-semibold ${change >= 0 ? 'stock-up' : 'stock-down'}">${change >= 0 ? '+' : ''}${formatNumber(change)}</div>
-                    </div>
-                </div>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div class="bg-gray-50 rounded-lg p-3">
-                        <div class="text-gray-500">今开</div>
-                        <div class="font-semibold">${formatNumber(open)}</div>
-                    </div>
-                    <div class="bg-gray-50 rounded-lg p-3">
-                        <div class="text-gray-500">最高</div>
-                        <div class="font-semibold stock-up">${formatNumber(high)}</div>
-                    </div>
-                    <div class="bg-gray-50 rounded-lg p-3">
-                        <div class="text-gray-500">最低</div>
-                        <div class="font-semibold stock-down">${formatNumber(low)}</div>
-                    </div>
-                    <div class="bg-gray-50 rounded-lg p-3">
-                        <div class="text-gray-500">昨收</div>
-                        <div class="font-semibold">${formatNumber(preClose)}</div>
-                    </div>
-                    <div class="bg-gray-50 rounded-lg p-3">
-                        <div class="text-gray-500">成交量</div>
-                        <div class="font-semibold">${formatVolume(vol * 100)}</div>
-                    </div>
-                    <div class="bg-gray-50 rounded-lg p-3">
-                        <div class="text-gray-500">成交额</div>
-                        <div class="font-semibold">${formatVolume(amount)}</div>
-                    </div>
-                    <div class="bg-gray-50 rounded-lg p-3 col-span-2">
-                        <div class="text-gray-500">数据来源</div>
-                        <div class="font-semibold text-gray-400 text-xs">实时行情</div>
-                    </div>
-                </div>
-            `;
-            return;
-        }
-    } catch (e) {
-        console.log('腾讯行情接口失败，回退到 Tushare:', e);
-    }
-
-    // 回退：Tushare 接口
-    try {
-        const data = await fetchFinanceData('daily', { ts_code: searchCode });
-        
-        if (data && data.items && data.items[0]) {
-            const item = data.items[0];
-            const fields = data.fields;
-            
-            const open = item[fields.indexOf('open')];
-            const high = item[fields.indexOf('high')];
-            const low = item[fields.indexOf('low')];
-            const close = item[fields.indexOf('close')];
-            const preClose = item[fields.indexOf('pre_close')];
-            const change = item[fields.indexOf('change')];
-            const pctChg = item[fields.indexOf('pct_chg')];
-            const vol = item[fields.indexOf('vol')];
-            const amount = item[fields.indexOf('amount')];
-            
-            const basicData = await fetchFinanceData('stock_basic', { ts_code: searchCode });
-            const name = basicData?.items?.[0]?.[basicData.fields.indexOf('name')] || searchCode;
-            const favored = isFavorited(searchCode);
-            
-            resultDiv.innerHTML = `
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
-                    <div>
-                        <div class="text-sm text-gray-500 mb-1">股票名称</div>
-                        <div class="flex items-center gap-2">
-                            <div class="text-xl font-bold text-gray-900">${name}</div>
-                            <button class="fav-btn text-xl ${favored ? 'favorited' : ''}" data-code="${searchCode}"
-                                onclick="${favored ? `removeFavorite('${searchCode}','${name}')` : `addFavorite('${searchCode}','${name}')`}"
-                                title="${favored ? '取消收藏' : '收藏此股票'}">
-                                ${favored ? '⭐' : '☆'}
-                            </button>
-                        </div>
-                        <div class="text-sm text-gray-400">${searchCode.split('.')[0]}</div>
-                    </div>
-                    <div>
-                        <div class="text-sm text-gray-500 mb-1">最新价</div>
-                        <div class="text-2xl font-bold ${pctChg >= 0 ? 'stock-up' : 'stock-down'}">${formatNumber(close)}</div>
-                    </div>
-                    <div>
-                        <div class="text-sm text-gray-500 mb-1">涨跌幅</div>
-                        <div class="text-xl font-semibold ${pctChg >= 0 ? 'stock-up' : 'stock-down'}">${pctChg >= 0 ? '+' : ''}${formatNumber(pctChg)}%</div>
-                    </div>
-                    <div>
-                        <div class="text-sm text-gray-500 mb-1">涨跌额</div>
-                        <div class="text-xl font-semibold ${change >= 0 ? 'stock-up' : 'stock-down'}">${change >= 0 ? '+' : ''}${formatNumber(change)}</div>
-                    </div>
-                </div>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div class="bg-gray-50 rounded-lg p-3">
-                        <div class="text-gray-500">今开</div>
-                        <div class="font-semibold">${formatNumber(open)}</div>
-                    </div>
-                    <div class="bg-gray-50 rounded-lg p-3">
-                        <div class="text-gray-500">最高</div>
-                        <div class="font-semibold stock-up">${formatNumber(high)}</div>
-                    </div>
-                    <div class="bg-gray-50 rounded-lg p-3">
-                        <div class="text-gray-500">最低</div>
-                        <div class="font-semibold stock-down">${formatNumber(low)}</div>
-                    </div>
-                    <div class="bg-gray-50 rounded-lg p-3">
-                        <div class="text-gray-500">昨收</div>
-                        <div class="font-semibold">${formatNumber(preClose)}</div>
-                    </div>
-                    <div class="bg-gray-50 rounded-lg p-3">
-                        <div class="text-gray-500">成交量</div>
-                        <div class="font-semibold">${formatVolume(vol * 100)}</div>
-                    </div>
-                    <div class="bg-gray-50 rounded-lg p-3">
-                        <div class="text-gray-500">成交额</div>
-                        <div class="font-semibold">${formatVolume(amount * 1000)}</div>
-                    </div>
-                    <div class="bg-gray-50 rounded-lg p-3 col-span-2">
-                        <div class="text-gray-500">交易日期</div>
-                        <div class="font-semibold">${item[fields.indexOf('trade_date')]}</div>
-                    </div>
-                </div>
-            `;
-        } else {
-            resultDiv.innerHTML = `
-                <div class="text-center text-gray-400 py-8">
-                    未找到相关股票，请检查代码<br>
-                    <span class="text-xs">提示：输入6位数字代码，如 000001</span>
-                </div>
-            `;
-        }
-    } catch (error) {
-        console.error('查询失败:', error);
-        resultDiv.innerHTML = '<div class="text-center text-gray-400 py-8">查询失败，请稍后重试</div>';
-    }
 }
 
 // ========== 北向资金 ==========
@@ -677,7 +475,7 @@ async function loadNorthMoney() {
                 const mType  = item[marketIdx];
                 const market = (mType === 1 || mType === '1') ? '沪' : '深';
                 return `
-                    <tr class="hover:bg-gray-50 cursor-pointer" onclick="searchStock('${code}')">
+                    <tr class="hover:bg-gray-50">
                         <td class="px-3 py-2">
                             <span class="font-medium text-gray-900">${name}</span>
                             <span class="text-xs text-gray-400 ml-1">${code}·${market}</span>
@@ -817,11 +615,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => switchTab(btn.dataset.tab));
-    });
-
-    document.getElementById('searchBtn').addEventListener('click', () => searchStock());
-    document.getElementById('searchInput').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') searchStock();
     });
     
     // 今日推荐操作事件绑定
@@ -1158,8 +951,7 @@ function renderFavoritesList() {
     }
 
     listDiv.innerHTML = userFavorites.map(fav => `
-        <div class="card p-4 flex items-center justify-between hover:shadow-md transition-shadow cursor-pointer"
-             onclick="searchStock('${fav.ts_code.split('.')[0]}')">
+        <div class="card p-4 flex items-center justify-between hover:shadow-md transition-shadow">
             <div class="flex items-center gap-4">
                 <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-sm">
                     ${fav.name.charAt(0)}
@@ -1428,11 +1220,11 @@ async function getTradeRecommendation() {
 【建议】买入/卖出/持有/观望
 【理由】[你的分析理由，不超过3行]`;
         
-        // 调用 Grok API
+        // 调用 Grok API，指定使用 grok-4-latest 模型
         const response = await fetch('/api/grok', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: prompt })
+            body: JSON.stringify({ message: prompt, model: 'grok-4-latest' })
         });
         
         const data = await response.json();

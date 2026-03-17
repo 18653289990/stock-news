@@ -12,18 +12,21 @@ export default async function handler(req, res) {
   let message = '';
   let image = null;
   let imageType = 'jpeg';
+  let requestModel = null;
   
   // GET 请求
   if (req.method === 'GET') {
     message = req.query?.message || '';
     image = req.query?.image || null;
     imageType = req.query?.imageType || 'jpeg';
+    requestModel = req.query?.model || null;
   } 
   // POST 请求
   else if (req.method === 'POST') {
     message = req.body?.message || '';
     image = req.body?.image || null;
     imageType = req.body?.imageType || 'jpeg';
+    requestModel = req.body?.model || null;
   }
   
   // 测试模式（无参数时返回健康检查）
@@ -44,9 +47,20 @@ export default async function handler(req, res) {
     let userContent;
     let model;
 
-    if (image) {
-      // 有图片：使用支持视觉的模型，content 为数组格式
+    // 根据请求或图片有无选择模型
+    if (requestModel) {
+      // 请求中指定了模型，则使用指定的模型
+      model = requestModel;
+    } else if (image) {
+      // 有图片：使用支持视觉的模型
       model = 'grok-4-1-fast-non-reasoning';
+    } else {
+      // 纯文本，默认模型
+      model = 'grok-4-1-fast-non-reasoning';
+    }
+
+    if (image) {
+      // 有图片时，content 为数组格式
       userContent = [
         {
           type: 'image_url',
@@ -62,7 +76,6 @@ export default async function handler(req, res) {
       ];
     } else {
       // 纯文本
-      model = 'grok-4-1-fast-non-reasoning';
       userContent = message;
     }
     

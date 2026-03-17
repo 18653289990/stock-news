@@ -243,10 +243,7 @@
 
         <!-- Tabs -->
         <div class="flex gap-2 mb-6 overflow-x-auto pb-2">
-            <button class="tab-btn tab-active px-4 py-2 rounded-lg text-sm font-medium transition-all" data-tab="search">
-                🔍 个股查询
-            </button>
-            <button class="tab-btn bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-all" data-tab="recommendation">
+            <button class="tab-btn tab-active px-4 py-2 rounded-lg text-sm font-medium transition-all" data-tab="recommendation">
                 💡 今日推荐操作
             </button>
             <button class="tab-btn bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-all" data-tab="north">
@@ -262,24 +259,6 @@
 
         <!-- Tab Content -->
         <div id="tabContent">
-            <!-- Search Tab -->
-            <div id="searchTab" class="tab-panel">
-                <div class="card p-4 mb-4">
-                    <div class="flex gap-2">
-                        <input type="text" id="searchInput" placeholder="输入股票代码或名称（如：000001 或 平安银行）" 
-                            class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                        <button id="searchBtn" class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors">
-                            查询
-                        </button>
-                    </div>
-                </div>
-                <div id="searchResult" class="card p-6">
-                    <div class="text-center text-gray-400">
-                        输入股票代码或名称进行查询
-                    </div>
-                </div>
-            </div>
-
             <!-- Recommendation Tab -->
             <div id="recommendationTab" class="tab-panel hidden">
                 <div class="card p-4 mb-4">
