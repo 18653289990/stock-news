@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>股票资讯 - Stock Info</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+        .stock-up { color: #ef4444; }
+        .stock-down { color: #22c55e; }
+        .stock-flat { color: #6b7280; }
+        .card { 
+            background: white; 
+            border-radius: 12px; 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+            border: 1px solid #f3f4f6;
+        }
+        .card:hover { box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .tab-active { 
+            background: #3b82f6; 
+            color: white; 
+        }
+        .news-item:hover { background: #f9fafb; }
+        .loading { 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            padding: 40px;
+        }
+        .loading::after {
+            content: '';
+            width: 32px;
+            height: 32px;
+            border: 3px solid #e5e7eb;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-4">
+            <div class="flex items-center justify-between">
+                <h1 class="text-2xl font-bold text-gray-900">📈 股票资讯</h1>
+                <div class="text-sm text-gray-500">
+                    <span id="currentTime"></span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        <!-- Market Overview -->
+        <section class="mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="card p-4">
+                    <div class="text-sm text-gray-500 mb-1">上证指数</div>
+                    <div class="text-2xl font-bold" id="shIndex">--</div>
+                    <div class="text-sm" id="shChange">--</div>
+                </div>
+                <div class="card p-4">
+                    <div class="text-sm text-gray-500 mb-1">深证成指</div>
+                    <div class="text-2xl font-bold" id="szIndex">--</div>
+                    <div class="text-sm" id="szChange">--</div>
+                </div>
+                <div class="card p-4">
+                    <div class="text-sm text-gray-500 mb-1">创业板指</div>
+                    <div class="text-2xl font-bold" id="cyIndex">--</div>
+                    <div class="text-sm" id="cyChange">--</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tabs -->
+        <div class="flex gap-2 mb-6 overflow-x-auto pb-2">
+            <button class="tab-btn tab-active px-4 py-2 rounded-lg text-sm font-medium transition-all" data-tab="ranking">
+                📊 涨跌幅排行
+            </button>
+            <button class="tab-btn bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-all" data-tab="search">
+                🔍 个股查询
+            </button>
+            <button class="tab-btn bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-all" data-tab="north">
+                💰 北向资金
+            </button>
+            <button class="tab-btn bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-all" data-tab="news">
+                📰 财经新闻
+            </button>
+            <button class="tab-btn bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-all" data-tab="grok">
+                🤖 Grok AI
+            </button>
+        </div>
+
+        <!-- Tab Content -->
+        <div id="tabContent">
+            <!-- Ranking Tab -->
+            <div id="rankingTab" class="tab-panel">
+                <div class="card overflow-hidden">
+                    <div class="p-4 border-b border-gray-100">
+                        <div class="flex gap-2">
+                            <button class="rank-type-btn bg-blue-500 text-white px-3 py-1 rounded text-sm" data-type="up">涨幅榜</button>
+                            <button class="rank-type-btn bg-gray-100 text-gray-700 px-3 py-1 rounded text-sm hover:bg-gray-200" data-type="down">跌幅榜</button>
+                            <button class="rank-type-btn bg-gray-100 text-gray-700 px-3 py-1 rounded text-sm hover:bg-gray-200" data-type="turnover">成交额</button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead class="bg-gray-50 text-xs text-gray-500">
+                                <tr>
+                                    <th class="text-left px-4 py-3">股票名称</th>
+                                    <th class="text-right px-4 py-3">最新价</th>
+                                    <th class="text-right px-4 py-3">涨跌幅</th>
+                                    <th class="text-right px-4 py-3">涨跌额</th>
+                                    <th class="text-right px-4 py-3">成交量(手)</th>
+                                    <th class="text-right px-4 py-3">成交额(万)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rankingBody" class="text-sm divide-y divide-gray-100">
+                                <tr><td colspan="6" class="loading"></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search Tab -->
+            <div id="searchTab" class="tab-panel hidden">
+                <div class="card p-4 mb-4">
+                    <div class="flex gap-2">
+                        <input type="text" id="searchInput" placeholder="输入股票代码或名称（如：000001 或 平安银行）" 
+                            class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <button id="searchBtn" class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors">
+                            查询
+                        </button>
+                    </div>
+                </div>
+                <div id="searchResult" class="card p-6">
+                    <div class="text-center text-gray-400">
+                        输入股票代码或名称进行查询
+                    </div>
+                </div>
+            </div>
+
+            <!-- North Money Tab -->
+            <div id="northTab" class="tab-panel hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="card p-4">
+                        <h3 class="font-semibold text-gray-900 mb-4">北向资金流向</h3>
+                        <div class="space-y-4" id="northMoneyData">
+                            <div class="loading"></div>
+                        </div>
+                    </div>
+                    <div class="card p-4">
+                        <h3 class="font-semibold text-gray-900 mb-4">近5日资金趋势</h3>
+                        <canvas id="northChart"></canvas>
+                    </div>
+                </div>
+                <div class="card mt-6 overflow-hidden">
+                    <h3 class="font-semibold text-gray-900 p-4 border-b border-gray-100">北向资金持股排行</h3>
+                    <table class="w-full">
+                        <thead class="bg-gray-50 text-xs text-gray-500">
+                            <tr>
+                                <th class="text-left px-4 py-3">股票名称</th>
+                                <th class="text-right px-4 py-3">持股数量(亿)</th>
+                                <th class="text-right px-4 py-3">持股市值(亿)</th>
+                                <th class="text-right px-4 py-3">占流通股(%)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="northStockBody" class="text-sm divide-y divide-gray-100">
+                            <tr><td colspan="4" class="loading"></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- News Tab -->
+            <div id="newsTab" class="tab-panel hidden">
+                <div class="card overflow-hidden">
+                    <div class="divide-y divide-gray-100" id="newsList">
+                        <div class="loading"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Grok AI Tab -->
+            <div id="grokTab" class="tab-panel hidden">
+                <div class="card p-4 mb-4">
+                    <!-- 图片上传区域 -->
+                    <div class="mb-3">
+                        <div id="imageDropZone" class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition-all">
+                            <input type="file" id="imageInput" accept="image/jpeg,image/png,image/jpg" class="hidden">
+                            <div id="imagePreviewContainer" class="hidden">
+                                <img id="imagePreview" class="max-h-40 mx-auto rounded-lg mb-2">
+                                <button id="removeImageBtn" class="text-red-500 text-sm hover:underline">移除图片</button>
+                            </div>
+                            <div id="uploadPlaceholder">
+                                <div class="text-3xl mb-1">📷</div>
+                                <div class="text-sm text-gray-500">点击或拖拽上传图片 (JPG/PNG, 最大 20MB)</div>
+                                <div class="text-xs text-gray-400 mt-1">支持截图直接粘贴 (Ctrl/Cmd + V)</div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 文本输入区域 -->
+                    <div class="flex gap-2">
+                        <input type="text" id="grokInput" placeholder="输入问题让 Grok AI 帮你分析（如：分析这张K线图的走势）" 
+                            class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <button id="grokBtn" class="bg-purple-500 text-white px-6 py-2 rounded-lg hover:bg-purple-600 transition-colors">
+                            提问
+                        </button>
+                    </div>
+                    <div class="mt-2 text-xs text-gray-400">
+                        💡 Grok AI 可以帮你分析股票、解读新闻、识别K线图等图片内容
+                    </div>
+                </div>
+                <div id="grokResult" class="card p-6">
+                    <div class="text-center text-gray-400">
+                        输入问题开始与 Grok AI 对话，支持上传图片进行视觉分析
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="mt-12 py-6 border-t border-gray-200 bg-white">
+        <div class="max-w-7xl mx-auto px-4 text-center text-sm text-gray-500">
+            数据仅供参考，不构成投资建议 | 
+            <span id="updateTime">数据加载中...</span>
+        </div>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
