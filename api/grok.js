@@ -1,4 +1,4 @@
-// 简单版本 - 只用 GET 请求
+// Grok AI API Handler
 export default async function handler(req, res) {
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -26,7 +26,7 @@ export default async function handler(req, res) {
     imageType = req.body?.imageType || 'jpeg';
   }
   
-  // 测试模式
+  // 测试模式（无参数时返回健康检查）
   if (!message && !image) {
     return res.status(200).json({ 
       success: true, 
@@ -40,22 +40,31 @@ export default async function handler(req, res) {
     if (!apiKey) {
       return res.status(500).json({ success: false, error: '未配置 XAI_API_KEY' });
     }
-    
-    const userContent = [];
-    
+
+    let userContent;
+    let model;
+
     if (image) {
-      userContent.push({
-        type: 'image_url',
-        image_url: { url: `data:image/${imageType};base64,${image}` }
-      });
+      // 有图片：使用支持视觉的模型，content 为数组格式
+      model = 'grok-4.20-beta';
+      userContent = [
+        {
+          type: 'image_url',
+          image_url: {
+            url: `data:image/${imageType};base64,${image}`,
+            detail: 'high'
+          }
+        },
+        {
+          type: 'text',
+          text: message || '请分析这张图片的内容'
+        }
+      ];
+    } else {
+      // 纯文本：使用 grok-3，content 为字符串格式
+      model = 'grok-3';
+      userContent = message;
     }
-    
-    userContent.push({
-      type: 'text',
-      text: message || '请分析这张图片的内容'
-    });
-    
-    const model = image ? 'grok-2-vision-1212' : 'grok-4-latest';
     
     const response = await fetch('https://api.x.ai/v1/chat/completions', {
       method: 'POST',
@@ -75,7 +84,13 @@ export default async function handler(req, res) {
     });
     
     if (!response.ok) {
-      return res.status(500).json({ success: false, error: `Grok API 错误: ${response.status}` });
+      const errText = await response.text();
+      console.error('Grok API error:', response.status, errText);
+      return res.status(500).json({ 
+        success: false, 
+        error: `Grok API 错误: ${response.status}`,
+        detail: errText
+      });
     }
     
     const result = await response.json();
@@ -88,6 +103,7 @@ export default async function handler(req, res) {
     });
     
   } catch (error) {
+    console.error('Handler error:', error);
     return res.status(500).json({ success: false, error: error.message });
   }
 }
