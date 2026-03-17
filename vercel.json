@@ -1,47 +1,16 @@
 {
-  "version": 2,
-  "builds": [
+  "rewrites": [
     {
-      "src": "api/**/*.py",
-      "use": "@vercel/python"
+      "source": "/api/finance",
+      "destination": "/api/finance"
     },
     {
-      "src": "*.html",
-      "use": "@vercel/static"
+      "source": "/api/news",
+      "destination": "/api/news"
     },
     {
-      "src": "*.js",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "*.css",
-      "use": "@vercel/static"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/finance",
-      "dest": "/api/finance.py"
-    },
-    {
-      "src": "/api/news",
-      "dest": "/api/news.py"
-    },
-    {
-      "src": "/api/grok",
-      "dest": "/api/grok.py"
-    },
-    {
-      "src": "/",
-      "dest": "/index.html"
-    },
-    {
-      "src": "/(.*\\.js)",
-      "dest": "/$1"
-    },
-    {
-      "src": "/(.*\\.css)",
-      "dest": "/$1"
+      "source": "/api/grok",
+      "destination": "/api/grok"
     }
   ]
 }

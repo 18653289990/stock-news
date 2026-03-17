@@ -2,64 +2,59 @@
 Grok AI API - Vercel Serverless Function
 支持文本和图片的多模态对话
 """
-from flask import Flask, jsonify, request
-import requests
+from http.server import BaseHTTPRequestHandler
+import json
 import os
+import urllib.request
+import urllib.error
 
-app = Flask(__name__)
-
-@app.route('/api/grok', methods=['POST'])
-def grok_api():
-    """Grok AI 对话接口（支持文本和图片）"""
-    try:
-        data = request.get_json()
+class handler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        content_length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(content_length)
+        
+        try:
+            data = json.loads(body)
+        except:
+            self.send_error_response(400, '无效的请求数据')
+            return
+        
         user_message = data.get('message', '')
-        image_base64 = data.get('image')  # Base64 编码的图片
-        image_type = data.get('imageType', 'jpeg')  # 图片类型: jpeg 或 png
+        image_base64 = data.get('image')
+        image_type = data.get('imageType', 'jpeg')
         
         if not user_message and not image_base64:
-            return jsonify({'success': False, 'error': '请输入问题或上传图片'})
+            self.send_error_response(400, '请输入问题或上传图片')
+            return
         
-        # 从环境变量获取 API Key
         api_key = os.environ.get('XAI_API_KEY')
         if not api_key:
-            return jsonify({'success': False, 'error': '未配置 XAI_API_KEY，请在 Vercel 环境变量中设置'})
+            self.send_error_response(500, '未配置 XAI_API_KEY')
+            return
         
         # 构建消息内容
         user_content = []
         
-        # 如果有图片，添加图片内容（使用 vision 模型）
         if image_base64:
-            # 构建 data URI
             data_uri = f"data:image/{image_type};base64,{image_base64}"
             user_content.append({
                 'type': 'image_url',
-                'image_url': {
-                    'url': data_uri
-                }
+                'image_url': {'url': data_uri}
             })
-            # 如果没有文字描述，添加默认提示
             if not user_message:
                 user_message = '请分析这张图片的内容'
         
-        # 添加文本内容
         if user_message:
             user_content.append({
                 'type': 'text',
                 'text': user_message
             })
         
-        # 选择模型：有图片时使用 vision 模型
         model = 'grok-2-vision-1212' if image_base64 else 'grok-4-latest'
         
         # 调用 Grok API
-        response = requests.post(
-            'https://api.x.ai/v1/chat/completions',
-            headers={
-                'Authorization': f'Bearer {api_key}',
-                'Content-Type': 'application/json'
-            },
-            json={
+        try:
+            req_data = json.dumps({
                 'model': model,
                 'messages': [
                     {
@@ -73,29 +68,54 @@ def grok_api():
                 ],
                 'temperature': 0.7,
                 'max_tokens': 2000
-            },
-            timeout=60
-        )
-        
-        if response.status_code != 200:
-            return jsonify({
-                'success': False, 
-                'error': f'Grok API 错误: {response.status_code} - {response.text}'
-            })
-        
-        result = response.json()
-        content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
-        
-        return jsonify({
-            'success': True,
-            'content': content,
-            'model': result.get('model', model)
-        })
-        
-    except requests.exceptions.Timeout:
-        return jsonify({'success': False, 'error': '请求超时，请稍后重试'})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
-# Vercel 需要这个 handler
-handler = app
+            }).encode('utf-8')
+            
+            req = urllib.request.Request(
+                'https://api.x.ai/v1/chat/completions',
+                data=req_data,
+                headers={
+                    'Authorization': f'Bearer {api_key}',
+                    'Content-Type': 'application/json'
+                },
+                method='POST'
+            )
+            
+            with urllib.request.urlopen(req, timeout=60) as response:
+                result = json.loads(response.read().decode('utf-8'))
+                content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+                
+                self.send_json_response({
+                    'success': True,
+                    'content': content,
+                    'model': result.get('model', model)
+                })
+                
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode('utf-8')
+            self.send_error_response(500, f'Grok API 错误: {e.code} - {error_body}')
+        except Exception as e:
+            self.send_error_response(500, str(e))
+    
+    def send_json_response(self, data):
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
+        self.wfile.write(json.dumps(data).encode('utf-8'))
+    
+    def send_error_response(self, code, message):
+        self.send_response(code)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
+        self.wfile.write(json.dumps({
+            'success': False,
+            'error': message
+        }).encode('utf-8'))
+    
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
