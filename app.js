@@ -524,6 +524,26 @@ document.addEventListener('DOMContentLoaded', function() {
         if (e.key === 'Enter') askGrok();
     });
 
+    setInterval(() => {
+        loadMarketIndex();
+        const activeTab = document.querySelector('.tab-active').dataset.tab;
+        if (activeTab === 'ranking') {
+            loadRanking(currentRankType);
+        }
+    }, 60000);
+
+    // 初始化认证状态
+    initAuth();
+
+    // 点击外部关闭用户菜单
+    document.addEventListener('click', (e) => {
+        const menu = document.getElementById('userMenuGroup');
+        if (!menu.contains(e.target)) {
+            document.getElementById('userDropdown').classList.add('hidden');
+        }
+    });
+});
+
 // ========== 认证状态管理 ==========
 let currentUser = null;
 let authToken = null;

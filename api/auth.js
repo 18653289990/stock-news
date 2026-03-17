@@ -36,7 +36,13 @@ export default async function handler(req, res) {
                 method: 'POST',
                 body: JSON.stringify({ email, password })
             });
-            if (status >= 400) return res.status(400).json({ error: data.msg || data.error_description || '注册失败' });
+            if (status >= 400) {
+                const errMsg = data.msg || data.error_description || '';
+                const friendlyMsg = errMsg.includes('invalid') ? '邮箱格式不正确' :
+                                    errMsg.includes('already') ? '该邮箱已注册，请直接登录' :
+                                    errMsg.includes('rate') ? '操作过于频繁，请稍后再试' : '注册失败，请稍后重试';
+                return res.status(400).json({ error: friendlyMsg });
+            }
             return res.json({ success: true, user: data.user, session: data.session });
         }
 
@@ -50,7 +56,7 @@ export default async function handler(req, res) {
                 method: 'POST',
                 body: JSON.stringify({ email, password })
             });
-            if (status >= 400) return res.status(400).json({ error: data.error_description || data.msg || '邮箱或密码错误' });
+            if (status >= 400) return res.status(400).json({ error: '邮箱或密码错误，请重新检查' });
             return res.json({
                 success: true,
                 user: data.user,
