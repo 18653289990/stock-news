@@ -508,6 +508,20 @@ async function searchStock(code = null) {
 // ========== 北向资金 ==========
 let northChart = null;
 
+// 从东方财富获取北向资金（公开接口，无需 token）
+async function fetchNorthMoneyEastmoney() {
+    const url = 'https://push2.eastmoney.com/api/qt/kamt.rtmin/get?fields1=f1,f2,f3,f4&fields2=f51,f52,f54,f56&ut=b2884a393a59ad64002292a3e90d46a5&cb=';
+    const res = await fetch(url, {
+        headers: { 'Referer': 'https://data.eastmoney.com/', 'User-Agent': 'Mozilla/5.0' },
+        signal: AbortSignal.timeout(5000)
+    });
+    if (!res.ok) throw new Error('eastmoney north money ' + res.status);
+    const text = await res.text();
+    // 返回格式：JSON 或 JSONP，直接解析
+    const json = JSON.parse(text);
+    return json;
+}
+
 async function loadNorthMoney() {
     const dataDiv = document.getElementById('northMoneyData');
     const tbody = document.getElementById('northStockBody');
@@ -515,25 +529,44 @@ async function loadNorthMoney() {
     dataDiv.innerHTML = '<div class="loading"></div>';
     tbody.innerHTML = '<tr><td colspan="4" class="loading"></td></tr>';
 
-    // 并行请求：净流入数据 + 十大成交股
+    // 并行请求：Tushare 北向资金 + 十大成交股
     try {
         const [flowData, top10Data] = await Promise.all([
             fetchFinanceData('moneyflow_hsgt', {}),
             fetchFinanceData('hsgt_top10', {})
         ]);
 
+        // ---- 调试：打印字段 ----
+        if (flowData) {
+            console.log('[north] moneyflow_hsgt fields:', flowData.fields);
+            console.log('[north] items count:', flowData.items?.length);
+            if (flowData.items?.length) console.log('[north] first item:', flowData.items[0]);
+        }
+
         // ---- 左侧：资金流向概况 ----
         if (flowData && flowData.items && flowData.items.length > 0) {
             const ff = flowData.fields;
             const latest = flowData.items[0];
-            const tradeDate    = latest[ff.indexOf('trade_date')];
-            const northNet     = latest[ff.indexOf('north_money')] ?? 0;   // 北向净流入(亿)
-            const shNet        = latest[ff.indexOf('sh_money')]    ?? 0;
-            const szNet        = latest[ff.indexOf('sz_money')]    ?? 0;
 
-            const netColor  = v => v >= 0 ? 'text-red-500' : 'text-green-600';
-            const netSign   = v => v >= 0 ? '+' : '';
-            const fmt       = v => `${netSign(v)}${Number(v).toFixed(2)}亿`;
+            // 防御性字段查找：Tushare 可能用 north_money / north_net / hgt_buy_amount 等
+            const findField = (...candidates) => {
+                for (const name of candidates) {
+                    const idx = ff.indexOf(name);
+                    if (idx !== -1) return latest[idx];
+                }
+                return null;
+            };
+
+            const tradeDate = findField('trade_date');
+            const northNet  = findField('north_money', 'north_net', 'north') ?? 0;
+            const shNet     = findField('sh_money', 'hgt_net', 'sh_net') ?? 0;
+            const szNet     = findField('sz_money', 'sgt_net', 'sz_net') ?? 0;
+
+            const netColor  = v => Number(v) >= 0 ? 'text-red-500' : 'text-green-600';
+            const netSign   = v => Number(v) >= 0 ? '+' : '';
+            const fmt       = v => v !== null && v !== undefined
+                ? `${netSign(v)}${Number(v).toFixed(2)}亿`
+                : '--';
 
             dataDiv.innerHTML = `
                 <div class="grid grid-cols-3 gap-2 text-center">
@@ -550,16 +583,22 @@ async function loadNorthMoney() {
                         <div class="text-base font-bold ${netColor(szNet)}">${fmt(szNet)}</div>
                     </div>
                 </div>
-                <div class="text-xs text-gray-400 mt-1 text-right">交易日：${tradeDate}</div>
+                <div class="text-xs text-gray-400 mt-1 text-right">
+                    交易日：${tradeDate || '--'}
+                    <span class="ml-1 text-gray-300">· 字段: ${ff.join(',')}</span>
+                </div>
             `;
 
             // ---- 右侧：近5日趋势图 ----
-            const recent5 = flowData.items.slice(0, 5).reverse(); // 从旧到新
+            const northIdx = ff.findIndex(f => ['north_money','north_net','north'].includes(f));
+            const dateIdx  = ff.indexOf('trade_date');
+
+            const recent5 = flowData.items.slice(0, 5).reverse();
             const labels  = recent5.map(r => {
-                const d = String(r[ff.indexOf('trade_date')]);
-                return `${d.slice(4,6)}/${d.slice(6,8)}`;
+                const d = String(r[dateIdx] || '');
+                return d.length === 8 ? `${d.slice(4,6)}/${d.slice(6,8)}` : d;
             });
-            const values  = recent5.map(r => parseFloat(r[ff.indexOf('north_money')]) || 0);
+            const values  = recent5.map(r => northIdx >= 0 ? (parseFloat(r[northIdx]) || 0) : 0);
 
             const canvas = document.getElementById('northChart');
             if (canvas) {
@@ -580,6 +619,7 @@ async function loadNorthMoney() {
                     },
                     options: {
                         responsive: true,
+                        maintainAspectRatio: false,
                         plugins: {
                             legend: { display: false },
                             tooltip: {
@@ -605,11 +645,13 @@ async function loadNorthMoney() {
                 });
             }
         } else {
-            dataDiv.innerHTML = '<div class="text-center py-4 text-gray-400 text-sm">暂无北向资金数据</div>';
+            const reason = flowData ? `字段: ${JSON.stringify(flowData.fields)}, 条数: ${flowData.items?.length}` : '返回null';
+            dataDiv.innerHTML = `<div class="text-center py-4 text-gray-400 text-sm">暂无北向资金数据<br><span class="text-xs">${reason}</span></div>`;
         }
 
         // ---- 十大成交股表格 ----
         if (top10Data && top10Data.items && top10Data.items.length > 0) {
+            console.log('[north] hsgt_top10 fields:', top10Data.fields);
             const tf = top10Data.fields;
             const todayItems = top10Data.items.filter(item =>
                 item[tf.indexOf('trade_date')] === top10Data.items[0][tf.indexOf('trade_date')]
@@ -622,12 +664,14 @@ async function loadNorthMoney() {
             const marketIdx = tf.indexOf('market_type');
 
             tbody.innerHTML = todayItems.slice(0, 10).map(item => {
-                const name   = item[nameIdx];
-                const code   = item[codeIdx].split('.')[0];
+                const name   = item[nameIdx] || '--';
+                const code   = (item[codeIdx] || '').split('.')[0];
                 const close  = item[closeIdx];
                 const change = item[changeIdx];
                 const amount = item[amountIdx];
-                const market = item[marketIdx] === 1 ? '沪' : '深';
+                const mType  = item[marketIdx];
+                // market_type: '1'=沪股通, '3'=深股通（Tushare 用字符串）
+                const market = (mType === 1 || mType === '1') ? '沪' : '深';
                 return `
                     <tr class="hover:bg-gray-50 cursor-pointer" onclick="searchStock('${code}')">
                         <td class="px-3 py-2">
@@ -635,12 +679,13 @@ async function loadNorthMoney() {
                             <span class="text-xs text-gray-400 ml-1">${code}·${market}</span>
                         </td>
                         <td class="text-right px-3 py-2 text-sm">${formatVolume(amount)}</td>
-                        <td class="text-right px-3 py-2 text-sm ${change >= 0 ? 'stock-up' : 'stock-down'}">${change >= 0 ? '+' : ''}${formatNumber(change)}</td>
-                        <td class="text-right px-3 py-2 text-sm ${change >= 0 ? 'stock-up' : 'stock-down'}">${formatNumber(close)}</td>
+                        <td class="text-right px-3 py-2 text-sm ${Number(change) >= 0 ? 'stock-up' : 'stock-down'}">${Number(change) >= 0 ? '+' : ''}${formatNumber(change)}</td>
+                        <td class="text-right px-3 py-2 text-sm ${Number(change) >= 0 ? 'stock-up' : 'stock-down'}">${formatNumber(close)}</td>
                     </tr>`;
             }).join('');
         } else {
-            tbody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-gray-400 text-sm">暂无数据</td></tr>';
+            const reason = top10Data ? `条数: ${top10Data.items?.length}` : '返回null';
+            tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-gray-400 text-sm">暂无数据 (${reason})</td></tr>`;
         }
     } catch (error) {
         console.error('加载北向资金失败:', error);

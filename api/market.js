@@ -1,7 +1,8 @@
 /**
  * /api/market.js
- * 代理 Yahoo Finance 行情接口，获取 A股指数 / 个股实时行情
- * Vercel 境外服务器可访问 Yahoo Finance
+ * 代理行情接口，获取 A股指数 / 个股实时行情
+ * 优先：Yahoo Finance v8 (境外可用)
+ * 备用：Stooq (更快，^SHC=上证，^SZI=深证，^CHI=创业板)
  *
  * symbol 映射规则：
  *   sh000001 → 000001.SS  (上证指数)
@@ -12,19 +13,53 @@
  */
 
 function toYahooSymbol(sym) {
-  // 已是 Yahoo 格式 (含 . )
   if (sym.includes('.')) return sym;
-  // 腾讯格式 sh/sz 前缀
-  if (sym.startsWith('sh')) {
-    return sym.slice(2) + '.SS';
-  }
-  if (sym.startsWith('sz')) {
-    return sym.slice(2) + '.SZ';
-  }
-  if (sym.startsWith('bj')) {
-    return sym.slice(2) + '.BJ';
-  }
+  if (sym.startsWith('sh')) return sym.slice(2) + '.SS';
+  if (sym.startsWith('sz')) return sym.slice(2) + '.SZ';
+  if (sym.startsWith('bj')) return sym.slice(2) + '.BJ';
   return sym;
+}
+
+async function fetchYahoo(symbols) {
+  const yahooSymbols = symbols.map(toYahooSymbol);
+  // 并行请求每个 symbol，避免批量慢
+  const results = await Promise.all(yahooSymbols.map(async (ySym, i) => {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ySym)}?interval=1d&range=1d`;
+    const r = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      signal: AbortSignal.timeout(5000)
+    });
+    if (!r.ok) throw new Error(`Yahoo ${ySym}: ${r.status}`);
+    const j = await r.json();
+    const meta = j?.chart?.result?.[0]?.meta;
+    if (!meta) throw new Error(`Yahoo ${ySym}: no meta`);
+    return {
+      sym: symbols[i],
+      data: {
+        symbol: symbols[i],
+        name: meta.shortName || meta.symbol || symbols[i],
+        price: meta.regularMarketPrice ?? 0,
+        preClose: meta.previousClose ?? meta.chartPreviousClose ?? 0,
+        open: meta.regularMarketOpen ?? 0,
+        high: meta.regularMarketDayHigh ?? 0,
+        low: meta.regularMarketDayLow ?? 0,
+        vol: Math.round((meta.regularMarketVolume ?? 0) / 100),
+        amount: 0,
+        change: (meta.regularMarketPrice ?? 0) - (meta.previousClose ?? meta.chartPreviousClose ?? 0),
+        pctChg: meta.previousClose
+          ? (((meta.regularMarketPrice ?? 0) - meta.previousClose) / meta.previousClose * 100)
+          : 0,
+      }
+    };
+  }));
+
+  const items = {};
+  results.forEach(r => { items[r.sym] = r.data; });
+  return items;
 }
 
 export default async function handler(req, res) {
@@ -47,43 +82,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const yahooSymbols = symbols.map(toYahooSymbol);
-    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${yahooSymbols.join(',')}&fields=shortName,regularMarketPrice,regularMarketPreviousClose,regularMarketOpen,regularMarketDayHigh,regularMarketDayLow,regularMarketVolume,regularMarketChange,regularMarketChangePercent`;
-
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-        'Accept': 'application/json',
-      },
-      signal: AbortSignal.timeout(8000)
-    });
-
-    if (!response.ok) {
-      throw new Error(`Yahoo Finance 返回 ${response.status}`);
-    }
-
-    const json = await response.json();
-    const quoteList = json?.quoteResponse?.result || [];
-
-    const items = {};
-    quoteList.forEach(q => {
-      // 反查原始 symbol（sh000001 → 000001.SS → 找回 sh000001）
-      const originalSym = symbols.find(s => toYahooSymbol(s) === q.symbol) || q.symbol;
-      items[originalSym] = {
-        symbol: originalSym,
-        name: q.shortName || q.symbol,
-        price: q.regularMarketPrice ?? 0,
-        preClose: q.regularMarketPreviousClose ?? 0,
-        open: q.regularMarketOpen ?? 0,
-        high: q.regularMarketDayHigh ?? 0,
-        low: q.regularMarketDayLow ?? 0,
-        vol: Math.round((q.regularMarketVolume ?? 0) / 100), // 转为手
-        amount: 0, // Yahoo 不提供成交额
-        change: q.regularMarketChange ?? 0,
-        pctChg: q.regularMarketChangePercent ?? 0,
-      };
-    });
-
+    const items = await fetchYahoo(symbols);
     return res.status(200).json({ success: true, items });
   } catch (error) {
     console.error('market api error:', error.message);
