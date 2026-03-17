@@ -644,6 +644,7 @@ async function askGrok() {
     `;
     
     try {
+        // 使用 POST 请求
         const requestBody = {message};
         
         // 如果有图片，添加图片数据
