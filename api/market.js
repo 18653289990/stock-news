@@ -1,9 +1,31 @@
 /**
  * /api/market.js
- * 代理腾讯财经行情接口，获取 A股指数 / 个股实时行情
- * 腾讯接口：https://qt.gtimg.cn/q=<symbol>
- * 格式：sh000001 / sz399001 / sz399006
+ * 代理 Yahoo Finance 行情接口，获取 A股指数 / 个股实时行情
+ * Vercel 境外服务器可访问 Yahoo Finance
+ *
+ * symbol 映射规则：
+ *   sh000001 → 000001.SS  (上证指数)
+ *   sz399001 → 399001.SZ  (深证成指)
+ *   sz399006 → 399006.SZ  (创业板)
+ *   sh600519 → 600519.SS  (沪市股票)
+ *   sz000001 → 000001.SZ  (深市股票)
  */
+
+function toYahooSymbol(sym) {
+  // 已是 Yahoo 格式 (含 . )
+  if (sym.includes('.')) return sym;
+  // 腾讯格式 sh/sz 前缀
+  if (sym.startsWith('sh')) {
+    return sym.slice(2) + '.SS';
+  }
+  if (sym.startsWith('sz')) {
+    return sym.slice(2) + '.SZ';
+  }
+  if (sym.startsWith('bj')) {
+    return sym.slice(2) + '.BJ';
+  }
+  return sym;
+}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -12,13 +34,12 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  // 支持 GET ?symbols=sh000001,sz399001 或 POST { symbols: [...] }
   let symbols = [];
   if (req.method === 'GET') {
     const s = req.query?.symbols || '';
     symbols = s.split(',').map(x => x.trim()).filter(Boolean);
   } else {
-    symbols = (req.body?.symbols || []);
+    symbols = req.body?.symbols || [];
   }
 
   if (!symbols.length) {
@@ -26,64 +47,46 @@ export default async function handler(req, res) {
   }
 
   try {
-    const url = `https://qt.gtimg.cn/q=${symbols.join(',')}`;
+    const yahooSymbols = symbols.map(toYahooSymbol);
+    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${yahooSymbols.join(',')}&fields=shortName,regularMarketPrice,regularMarketPreviousClose,regularMarketOpen,regularMarketDayHigh,regularMarketDayLow,regularMarketVolume,regularMarketChange,regularMarketChangePercent`;
+
     const response = await fetch(url, {
       headers: {
-        'Referer': 'https://finance.qq.com',
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      }
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+        'Accept': 'application/json',
+      },
+      signal: AbortSignal.timeout(8000)
     });
 
     if (!response.ok) {
-      throw new Error(`腾讯行情接口返回 ${response.status}`);
+      throw new Error(`Yahoo Finance 返回 ${response.status}`);
     }
 
-    const text = await response.text();
-    // 解析腾讯行情格式
-    // v_sh000001="1~上证指数~000001~3382.02~3357.99~3357.99~...~..."
+    const json = await response.json();
+    const quoteList = json?.quoteResponse?.result || [];
+
     const items = {};
-    const lines = text.split('\n').filter(l => l.trim());
-
-    for (const line of lines) {
-      const match = line.match(/^v_(\w+)="(.+)"$/);
-      if (!match) continue;
-      const symbol = match[1];
-      const parts = match[2].split('~');
-
-      // 腾讯行情字段索引
-      // 0:类型 1:名称 2:代码 3:最新价 4:昨收 5:今开 6:成交量(手) 7:外盘 8:内盘
-      // 9:买一 10:买一量 ... 31:今高 32:今低 ...
-      // 33:价格/成交(均价) 34:成交量(股) 35:成交额
-      // 36:换手率 37:市盈率 38:-- 39:最高 40:最低 41:振幅
-      const name = parts[1] || '';
-      const price = parseFloat(parts[3]) || 0;
-      const preClose = parseFloat(parts[4]) || 0;
-      const open = parseFloat(parts[5]) || 0;
-      const vol = parseFloat(parts[6]) || 0; // 手
-      const high = parseFloat(parts[33]) || parseFloat(parts[39]) || 0;
-      const low = parseFloat(parts[34]) || parseFloat(parts[40]) || 0;
-      const amount = parseFloat(parts[37]) || 0; // 成交额（元）
-      const change = preClose > 0 ? price - preClose : 0;
-      const pctChg = preClose > 0 ? (change / preClose) * 100 : 0;
-
-      items[symbol] = {
-        symbol,
-        name,
-        price,
-        preClose,
-        open,
-        high,
-        low,
-        vol,
-        amount,
-        change: parseFloat(change.toFixed(3)),
-        pctChg: parseFloat(pctChg.toFixed(2))
+    quoteList.forEach(q => {
+      // 反查原始 symbol（sh000001 → 000001.SS → 找回 sh000001）
+      const originalSym = symbols.find(s => toYahooSymbol(s) === q.symbol) || q.symbol;
+      items[originalSym] = {
+        symbol: originalSym,
+        name: q.shortName || q.symbol,
+        price: q.regularMarketPrice ?? 0,
+        preClose: q.regularMarketPreviousClose ?? 0,
+        open: q.regularMarketOpen ?? 0,
+        high: q.regularMarketDayHigh ?? 0,
+        low: q.regularMarketDayLow ?? 0,
+        vol: Math.round((q.regularMarketVolume ?? 0) / 100), // 转为手
+        amount: 0, // Yahoo 不提供成交额
+        change: q.regularMarketChange ?? 0,
+        pctChg: q.regularMarketChangePercent ?? 0,
       };
-    }
+    });
 
     return res.status(200).json({ success: true, items });
   } catch (error) {
-    console.error('market api error:', error);
+    console.error('market api error:', error.message);
     return res.status(200).json({ success: false, error: error.message, items: {} });
   }
 }

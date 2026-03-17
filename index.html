@@ -279,27 +279,29 @@
 
             <!-- North Money Tab -->
             <div id="northTab" class="tab-panel hidden">
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div class="card p-4">
-                        <h3 class="font-semibold text-gray-900 mb-4">北向资金流向</h3>
-                        <div class="space-y-4" id="northMoneyData">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+                    <div class="card p-3">
+                        <h3 class="text-sm font-semibold text-gray-700 mb-2">💰 北向资金流向</h3>
+                        <div id="northMoneyData">
                             <div class="loading"></div>
                         </div>
                     </div>
-                    <div class="card p-4">
-                        <h3 class="font-semibold text-gray-900 mb-4">近5日资金趋势</h3>
-                        <canvas id="northChart"></canvas>
+                    <div class="card p-3">
+                        <h3 class="text-sm font-semibold text-gray-700 mb-2">📈 近5日净流入趋势</h3>
+                        <div style="height:130px;position:relative;">
+                            <canvas id="northChart"></canvas>
+                        </div>
                     </div>
                 </div>
-                <div class="card mt-6 overflow-hidden">
-                    <h3 class="font-semibold text-gray-900 p-4 border-b border-gray-100">北向资金持股排行</h3>
+                <div class="card overflow-hidden">
+                    <h3 class="text-sm font-semibold text-gray-700 px-3 py-2 border-b border-gray-100">沪深股通十大成交股</h3>
                     <table class="w-full">
-                        <thead class="bg-gray-50 text-xs text-gray-500">
+                        <thead class="bg-gray-50 text-xs text-gray-400">
                             <tr>
-                                <th class="text-left px-4 py-3">股票名称</th>
-                                <th class="text-right px-4 py-3">持股数量(亿)</th>
-                                <th class="text-right px-4 py-3">持股市值(亿)</th>
-                                <th class="text-right px-4 py-3">占流通股(%)</th>
+                                <th class="text-left px-3 py-2">股票</th>
+                                <th class="text-right px-3 py-2">成交额</th>
+                                <th class="text-right px-3 py-2">涨跌</th>
+                                <th class="text-right px-3 py-2">价格</th>
                             </tr>
                         </thead>
                         <tbody id="northStockBody" class="text-sm divide-y divide-gray-100">

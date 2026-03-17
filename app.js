@@ -511,94 +511,141 @@ let northChart = null;
 async function loadNorthMoney() {
     const dataDiv = document.getElementById('northMoneyData');
     const tbody = document.getElementById('northStockBody');
-    
+
     dataDiv.innerHTML = '<div class="loading"></div>';
     tbody.innerHTML = '<tr><td colspan="4" class="loading"></td></tr>';
 
+    // 并行请求：净流入数据 + 十大成交股
     try {
-        // 使用沪深股通十大成交股接口
-        const data = await fetchFinanceData('hsgt_top10', {});
-        
-        if (data && data.items && data.items.length > 0) {
-            const fields = data.fields;
-            const todayItems = data.items.filter(item => {
-                const dateIdx = fields.indexOf('trade_date');
-                return item[dateIdx] === data.items[0][dateIdx];
-            });
-            
-            const dateIdx = fields.indexOf('trade_date');
-            const tradeDate = data.items[0][dateIdx];
-            
-            // 计算总成交额
-            const amountIdx = fields.indexOf('amount');
-            const totalAmount = todayItems.reduce((sum, item) => sum + (item[amountIdx] || 0), 0);
-            
-            // 沪股通和深股通分别统计
-            const marketIdx = fields.indexOf('market_type');
-            const shAmount = todayItems.filter(item => item[marketIdx] === 1).reduce((sum, item) => sum + (item[amountIdx] || 0), 0);
-            const szAmount = todayItems.filter(item => item[marketIdx] === 3).reduce((sum, item) => sum + (item[amountIdx] || 0), 0);
-            
+        const [flowData, top10Data] = await Promise.all([
+            fetchFinanceData('moneyflow_hsgt', {}),
+            fetchFinanceData('hsgt_top10', {})
+        ]);
+
+        // ---- 左侧：资金流向概况 ----
+        if (flowData && flowData.items && flowData.items.length > 0) {
+            const ff = flowData.fields;
+            const latest = flowData.items[0];
+            const tradeDate    = latest[ff.indexOf('trade_date')];
+            const northNet     = latest[ff.indexOf('north_money')] ?? 0;   // 北向净流入(亿)
+            const shNet        = latest[ff.indexOf('sh_money')]    ?? 0;
+            const szNet        = latest[ff.indexOf('sz_money')]    ?? 0;
+
+            const netColor  = v => v >= 0 ? 'text-red-500' : 'text-green-600';
+            const netSign   = v => v >= 0 ? '+' : '';
+            const fmt       = v => `${netSign(v)}${Number(v).toFixed(2)}亿`;
+
             dataDiv.innerHTML = `
-                <div class="grid grid-cols-2 gap-4">
-                    <div class="bg-gray-50 rounded-lg p-4">
-                        <div class="text-sm text-gray-500 mb-1">十大成交总额</div>
-                        <div class="text-2xl font-bold text-gray-900">
-                            ${formatVolume(totalAmount)}
-                        </div>
+                <div class="grid grid-cols-3 gap-2 text-center">
+                    <div class="bg-gray-50 rounded-lg p-2">
+                        <div class="text-xs text-gray-400 mb-0.5">北向合计</div>
+                        <div class="text-base font-bold ${netColor(northNet)}">${fmt(northNet)}</div>
                     </div>
-                    <div class="bg-gray-50 rounded-lg p-4">
-                        <div class="text-sm text-gray-500 mb-1">交易日期</div>
-                        <div class="text-2xl font-bold text-gray-900">${tradeDate}</div>
+                    <div class="bg-gray-50 rounded-lg p-2">
+                        <div class="text-xs text-gray-400 mb-0.5">沪股通</div>
+                        <div class="text-base font-bold ${netColor(shNet)}">${fmt(shNet)}</div>
                     </div>
-                    <div class="bg-gray-50 rounded-lg p-4">
-                        <div class="text-sm text-gray-500 mb-1">沪股通成交</div>
-                        <div class="text-xl font-semibold text-gray-700">
-                            ${formatVolume(shAmount)}
-                        </div>
-                    </div>
-                    <div class="bg-gray-50 rounded-lg p-4">
-                        <div class="text-sm text-gray-500 mb-1">深股通成交</div>
-                        <div class="text-xl font-semibold text-gray-700">
-                            ${formatVolume(szAmount)}
-                        </div>
+                    <div class="bg-gray-50 rounded-lg p-2">
+                        <div class="text-xs text-gray-400 mb-0.5">深股通</div>
+                        <div class="text-base font-bold ${netColor(szNet)}">${fmt(szNet)}</div>
                     </div>
                 </div>
+                <div class="text-xs text-gray-400 mt-1 text-right">交易日：${tradeDate}</div>
             `;
-            
-            // 显示十大成交股
-            const nameIdx = fields.indexOf('name');
-            const codeIdx = fields.indexOf('ts_code');
-            const closeIdx = fields.indexOf('close');
-            const changeIdx = fields.indexOf('change');
-            
+
+            // ---- 右侧：近5日趋势图 ----
+            const recent5 = flowData.items.slice(0, 5).reverse(); // 从旧到新
+            const labels  = recent5.map(r => {
+                const d = String(r[ff.indexOf('trade_date')]);
+                return `${d.slice(4,6)}/${d.slice(6,8)}`;
+            });
+            const values  = recent5.map(r => parseFloat(r[ff.indexOf('north_money')]) || 0);
+
+            const canvas = document.getElementById('northChart');
+            if (canvas) {
+                if (northChart) northChart.destroy();
+                const ctx = canvas.getContext('2d');
+                northChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: '北向净流入(亿)',
+                            data: values,
+                            backgroundColor: values.map(v => v >= 0 ? 'rgba(239,68,68,0.7)' : 'rgba(34,197,94,0.7)'),
+                            borderColor:     values.map(v => v >= 0 ? '#ef4444' : '#22c55e'),
+                            borderWidth: 1,
+                            borderRadius: 4,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: ctx => `${ctx.raw >= 0 ? '+' : ''}${ctx.raw.toFixed(2)}亿`
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                grid: { color: 'rgba(0,0,0,0.05)' },
+                                ticks: {
+                                    font: { size: 11 },
+                                    callback: v => `${v}亿`
+                                }
+                            },
+                            x: {
+                                grid: { display: false },
+                                ticks: { font: { size: 11 } }
+                            }
+                        }
+                    }
+                });
+            }
+        } else {
+            dataDiv.innerHTML = '<div class="text-center py-4 text-gray-400 text-sm">暂无北向资金数据</div>';
+        }
+
+        // ---- 十大成交股表格 ----
+        if (top10Data && top10Data.items && top10Data.items.length > 0) {
+            const tf = top10Data.fields;
+            const todayItems = top10Data.items.filter(item =>
+                item[tf.indexOf('trade_date')] === top10Data.items[0][tf.indexOf('trade_date')]
+            );
+            const nameIdx   = tf.indexOf('name');
+            const codeIdx   = tf.indexOf('ts_code');
+            const closeIdx  = tf.indexOf('close');
+            const changeIdx = tf.indexOf('change');
+            const amountIdx = tf.indexOf('amount');
+            const marketIdx = tf.indexOf('market_type');
+
             tbody.innerHTML = todayItems.slice(0, 10).map(item => {
-                const name = item[nameIdx];
-                const code = item[codeIdx].split('.')[0];
-                const close = item[closeIdx];
+                const name   = item[nameIdx];
+                const code   = item[codeIdx].split('.')[0];
+                const close  = item[closeIdx];
                 const change = item[changeIdx];
                 const amount = item[amountIdx];
-                const market = item[marketIdx] === 1 ? '沪股通' : '深股通';
-                
+                const market = item[marketIdx] === 1 ? '沪' : '深';
                 return `
                     <tr class="hover:bg-gray-50 cursor-pointer" onclick="searchStock('${code}')">
-                        <td class="px-4 py-3">
-                            <div class="font-medium text-gray-900">${name}</div>
-                            <div class="text-xs text-gray-400">${code} · ${market}</div>
+                        <td class="px-3 py-2">
+                            <span class="font-medium text-gray-900">${name}</span>
+                            <span class="text-xs text-gray-400 ml-1">${code}·${market}</span>
                         </td>
-                        <td class="text-right px-4 py-3">${formatNumber(amount, 0)}</td>
-                        <td class="text-right px-4 py-3">${formatVolume(amount)}</td>
-                        <td class="text-right px-4 py-3 ${change >= 0 ? 'stock-up' : 'stock-down'}">${formatNumber(close)}</td>
-                    </tr>
-                `;
+                        <td class="text-right px-3 py-2 text-sm">${formatVolume(amount)}</td>
+                        <td class="text-right px-3 py-2 text-sm ${change >= 0 ? 'stock-up' : 'stock-down'}">${change >= 0 ? '+' : ''}${formatNumber(change)}</td>
+                        <td class="text-right px-3 py-2 text-sm ${change >= 0 ? 'stock-up' : 'stock-down'}">${formatNumber(close)}</td>
+                    </tr>`;
             }).join('');
         } else {
-            dataDiv.innerHTML = '<div class="text-center py-4 text-gray-400">暂无北向资金数据</div>';
-            tbody.innerHTML = '<tr><td colspan="4" class="text-center py-8 text-gray-400">暂无数据</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-gray-400 text-sm">暂无数据</td></tr>';
         }
     } catch (error) {
         console.error('加载北向资金失败:', error);
-        dataDiv.innerHTML = '<div class="text-center py-4 text-gray-400">加载失败，请稍后重试</div>';
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center py-8 text-gray-400">加载失败</td></tr>';
+        dataDiv.innerHTML = '<div class="text-center py-4 text-gray-400 text-sm">加载失败，请稍后重试</div>';
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-gray-400 text-sm">加载失败</td></tr>';
     }
 }
 
