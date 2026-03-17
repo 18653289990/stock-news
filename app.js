@@ -1489,6 +1489,38 @@ async function loadDailyPicks() {
         </div>
     `;
     
+    await generatePicksFromGrok();
+}
+
+// 强制刷新推荐（清除缓存，重新生成）
+async function refreshDailyPicks() {
+    const pickList = document.getElementById('pickList');
+    
+    // 清除本地缓存
+    try {
+        localStorage.removeItem('dailyPicks');
+        console.log('已清除缓存的推荐');
+    } catch (e) {
+        console.error('清除缓存失败:', e);
+    }
+    
+    // 显示加载动画
+    pickList.innerHTML = `
+        <div class="card p-8">
+            <div class="flex items-center justify-center gap-2">
+                <div class="loading" style="padding:10px;"></div>
+                <span class="text-gray-600">Grok AI 正在重新精选推荐...</span>
+            </div>
+        </div>
+    `;
+    
+    await generatePicksFromGrok();
+}
+
+// 从Grok生成推荐
+async function generatePicksFromGrok() {
+    const pickList = document.getElementById('pickList');
+    
     try {
         const prompt = `你是一个专业的股票分析师。请根据今天（${new Date().toLocaleDateString('zh-CN')}）的市场情况和热点，给我推荐今天最值得关注的10只股票。
 
@@ -1498,10 +1530,17 @@ async function loadDailyPicks() {
 3. 按照推荐程度从强到弱排序
 4. 原因需要涵盖技术面或基本面的关键因素
 
-请用以下格式回答（严格按照这个格式）：
+请用以下格式回答（严格按照这个格式，每行一个推荐）：
 【推荐1】000858 五粮液 - 原因简述，不超过2句话
 【推荐2】600519 贵州茅台 - 原因简述，不超过2句话
-...以此类推到【推荐10】`;
+【推荐3】600000 浦发银行 - 原因简述，不超过2句话
+【推荐4】601398 工商银行 - 原因简述，不超过2句话
+【推荐5】600036 招商银行 - 原因简述，不超过2句话
+【推荐6】601988 中国银行 - 原因简述，不超过2句话
+【推荐7】600028 中国石化 - 原因简述，不超过2句话
+【推荐8】601857 中国石油 - 原因简述，不超过2句话
+【推荐9】601888 中国国旅 - 原因简述，不超过2句话
+【推荐10】600900 长江电力 - 原因简述，不超过2句话`;
 
         const response = await fetch('/api/grok', {
             method: 'POST',
@@ -1521,6 +1560,7 @@ async function loadDailyPicks() {
                 // 显示推荐列表
                 renderPicksList(picks);
                 updateLastUpdateTime(picks);
+                console.log(`成功加载 ${picks.length} 只推荐股票`);
             } else {
                 pickList.innerHTML = `
                     <div class="card p-8">
@@ -1555,22 +1595,27 @@ async function loadDailyPicks() {
 function parseGrokPicks(content) {
     try {
         const picks = [];
-        // 匹配【推荐N】xxx xxx - 原因 这样的格式
-        const regex = /【推荐\d+】\s*(\d{6})\s+(.+?)\s*[-－—]\s*(.+?)(?=【推荐|\n$|$)/g;
-        let match;
+        // 匹配【推荐N】代码 名称 - 原因 这样的格式
+        // 改进正则：使用更灵活的匹配，支持多行原因
+        const lines = content.split('\n');
         
-        while ((match = regex.exec(content)) !== null) {
-            const code = match[1];
-            const name = match[2].trim();
-            const reason = match[3].trim();
-            
-            picks.push({
-                code: code,
-                name: name,
-                reason: reason
-            });
+        for (const line of lines) {
+            // 匹配【推荐N】开头的行
+            const match = line.match(/【推荐\d+】\s*(\d{6})\s+(.+?)\s*[-－—]\s*(.+)/);
+            if (match) {
+                const code = match[1];
+                const name = match[2].trim();
+                const reason = match[3].trim();
+                
+                picks.push({
+                    code: code,
+                    name: name,
+                    reason: reason
+                });
+            }
         }
         
+        console.log(`解析到 ${picks.length} 只股票推荐`);
         return picks.length > 0 ? picks : null;
     } catch (e) {
         console.error('解析推荐失败:', e);
