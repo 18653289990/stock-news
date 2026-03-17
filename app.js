@@ -1487,6 +1487,9 @@ function addRecommendationStyles() {
     `;
     document.head.appendChild(style);
 }
+
+// ========== Grok AI ==========
+async function askGrok() {
     const input = document.getElementById('grokInput');
     const resultDiv = document.getElementById('grokResult');
     const resultContent = document.getElementById('grokResultContent');
