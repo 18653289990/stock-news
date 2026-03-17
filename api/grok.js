@@ -13,7 +13,6 @@ export default async function handler(req, res) {
   let image = null;
   let imageType = 'jpeg';
   let requestModel = null;
-  let requestTemperature = null;
   
   // GET 请求
   if (req.method === 'GET') {
@@ -21,7 +20,6 @@ export default async function handler(req, res) {
     image = req.query?.image || null;
     imageType = req.query?.imageType || 'jpeg';
     requestModel = req.query?.model || null;
-    requestTemperature = req.query?.temperature !== undefined ? parseFloat(req.query.temperature) : null;
   } 
   // POST 请求
   else if (req.method === 'POST') {
@@ -29,7 +27,6 @@ export default async function handler(req, res) {
     image = req.body?.image || null;
     imageType = req.body?.imageType || 'jpeg';
     requestModel = req.body?.model || null;
-    requestTemperature = req.body?.temperature !== undefined ? parseFloat(req.body.temperature) : null;
   }
   
   // 测试模式（无参数时返回健康检查）
@@ -94,7 +91,7 @@ export default async function handler(req, res) {
           { role: 'system', content: '你是 Grok，一个乐于助人的 AI 助手。请用中文回答。' },
           { role: 'user', content: userContent }
         ],
-        temperature: requestTemperature !== null ? requestTemperature : 0,
+        temperature: 0.7,
         max_tokens: 2000
       })
     });
