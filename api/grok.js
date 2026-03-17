@@ -1,3 +1,10 @@
+// Vercel Node.js API
+export const config = {
+  api: {
+    bodyParser: true,
+  },
+};
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS, GET');
@@ -21,7 +28,10 @@ export default async function handler(req, res) {
   }
   
   try {
-    const { message, image, imageType = 'jpeg' } = req.body || {};
+    const body = req.body;
+    const message = body?.message || '';
+    const image = body?.image;
+    const imageType = body?.imageType || 'jpeg';
     
     if (!message && !image) {
       return res.status(400).json({ success: false, error: '请输入问题或上传图片' });
