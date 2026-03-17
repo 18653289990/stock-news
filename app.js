@@ -655,32 +655,44 @@ document.addEventListener('DOMContentLoaded', function() {
 // 定时器ID，用于取消之前的定时器
 let dailyUpdateTimerId = null;
 
-// 计划每日9点更新
+// 判断是否是交易日（周一到周五）
+function isTradingDay() {
+    const now = new Date();
+    const day = now.getDay();
+    return day >= 1 && day <= 5; // 1-5 代表周一到周五
+}
+
+// 判断是否在交易时间范围内（9:30-15:00）
+function isInTradingHours() {
+    const now = new Date();
+    const hour = now.getHours();
+    const minute = now.getMinutes();
+    const currentTime = hour * 100 + minute;
+    return currentTime >= 930 && currentTime < 1500; // 9:30-14:59
+}
+
+// 计划每小时刷新（仅限交易日 9:30-15:00）
 function scheduleDaily9AmUpdate() {
-    function checkAndUpdate() {
-        const now = new Date();
-        const hour = now.getHours();
-        const minute = now.getMinutes();
-        
-        // 如果当前时间是9:00-9:01，清空存储的推荐，下次加载会自动调用Grok
-        if (hour === 9 && minute <= 1) {
+    function checkAndRefresh() {
+        if (isTradingDay() && isInTradingHours()) {
+            console.log('在交易时间内，刷新每日推荐...');
             try {
                 localStorage.removeItem('dailyPicks');
-                console.log('每日推荐已清空，准备重新生成');
+                loadDailyPicks();
             } catch (e) {
-                console.error('清空推荐失败:', e);
+                console.error('刷新推荐失败:', e);
             }
         }
     }
     
-    // 每分钟检查一次是否到达9点
+    // 每分钟检查一次是否在交易时间内
     if (dailyUpdateTimerId) {
         clearInterval(dailyUpdateTimerId);
     }
-    dailyUpdateTimerId = setInterval(checkAndUpdate, 60000); // 每分钟检查一次
+    dailyUpdateTimerId = setInterval(checkAndRefresh, 60000); // 每分钟检查一次
     
     // 立即检查一次
-    checkAndUpdate();
+    checkAndRefresh();
 }
 
 // ========== 认证状态管理 ==========
@@ -1485,31 +1497,6 @@ async function loadDailyPicks() {
             <div class="flex items-center justify-center gap-2">
                 <div class="loading" style="padding:10px;"></div>
                 <span class="text-gray-600">Grok AI 正在精选今日推荐...</span>
-            </div>
-        </div>
-    `;
-    
-    await generatePicksFromGrok();
-}
-
-// 强制刷新推荐（清除缓存，重新生成）
-async function refreshDailyPicks() {
-    const pickList = document.getElementById('pickList');
-    
-    // 清除本地缓存
-    try {
-        localStorage.removeItem('dailyPicks');
-        console.log('已清除缓存的推荐');
-    } catch (e) {
-        console.error('清除缓存失败:', e);
-    }
-    
-    // 显示加载动画
-    pickList.innerHTML = `
-        <div class="card p-8">
-            <div class="flex items-center justify-center gap-2">
-                <div class="loading" style="padding:10px;"></div>
-                <span class="text-gray-600">Grok AI 正在重新精选推荐...</span>
             </div>
         </div>
     `;
