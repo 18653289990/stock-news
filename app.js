@@ -508,20 +508,6 @@ async function searchStock(code = null) {
 // ========== 北向资金 ==========
 let northChart = null;
 
-// 从东方财富获取北向资金（公开接口，无需 token）
-async function fetchNorthMoneyEastmoney() {
-    const url = 'https://push2.eastmoney.com/api/qt/kamt.rtmin/get?fields1=f1,f2,f3,f4&fields2=f51,f52,f54,f56&ut=b2884a393a59ad64002292a3e90d46a5&cb=';
-    const res = await fetch(url, {
-        headers: { 'Referer': 'https://data.eastmoney.com/', 'User-Agent': 'Mozilla/5.0' },
-        signal: AbortSignal.timeout(5000)
-    });
-    if (!res.ok) throw new Error('eastmoney north money ' + res.status);
-    const text = await res.text();
-    // 返回格式：JSON 或 JSONP，直接解析
-    const json = JSON.parse(text);
-    return json;
-}
-
 async function loadNorthMoney() {
     const dataDiv = document.getElementById('northMoneyData');
     const tbody = document.getElementById('northStockBody');
@@ -529,42 +515,23 @@ async function loadNorthMoney() {
     dataDiv.innerHTML = '<div class="loading"></div>';
     tbody.innerHTML = '<tr><td colspan="4" class="loading"></td></tr>';
 
-    // 并行请求：Tushare 北向资金 + 十大成交股
+    // 并行：东方财富北向 + Tushare 十大成交股
     try {
-        const [flowData, top10Data] = await Promise.all([
-            fetchFinanceData('moneyflow_hsgt', {}),
+        const [northRes, top10Data] = await Promise.all([
+            fetch('/api/north').then(r => r.json()).catch(() => null),
             fetchFinanceData('hsgt_top10', {})
         ]);
 
-        // ---- 调试：打印字段 ----
-        if (flowData) {
-            console.log('[north] moneyflow_hsgt fields:', flowData.fields);
-            console.log('[north] items count:', flowData.items?.length);
-            if (flowData.items?.length) console.log('[north] first item:', flowData.items[0]);
-        }
+        // ---- 左侧：资金流向概况（东方财富） ----
+        if (northRes && northRes.success && northRes.today) {
+            const { today, history } = northRes;
+            const northNet = today.north;
+            const shNet    = today.sh;
+            const szNet    = today.sz;
 
-        // ---- 左侧：资金流向概况 ----
-        if (flowData && flowData.items && flowData.items.length > 0) {
-            const ff = flowData.fields;
-            const latest = flowData.items[0];
-
-            // 防御性字段查找：Tushare 可能用 north_money / north_net / hgt_buy_amount 等
-            const findField = (...candidates) => {
-                for (const name of candidates) {
-                    const idx = ff.indexOf(name);
-                    if (idx !== -1) return latest[idx];
-                }
-                return null;
-            };
-
-            const tradeDate = findField('trade_date');
-            const northNet  = findField('north_money', 'north_net', 'north') ?? 0;
-            const shNet     = findField('sh_money', 'hgt_net', 'sh_net') ?? 0;
-            const szNet     = findField('sz_money', 'sgt_net', 'sz_net') ?? 0;
-
-            const netColor  = v => Number(v) >= 0 ? 'text-red-500' : 'text-green-600';
-            const netSign   = v => Number(v) >= 0 ? '+' : '';
-            const fmt       = v => v !== null && v !== undefined
+            const netColor = v => Number(v) >= 0 ? 'text-red-500' : 'text-green-600';
+            const netSign  = v => Number(v) >= 0 ? '+' : '';
+            const fmt      = v => (v !== null && v !== undefined && !isNaN(v))
                 ? `${netSign(v)}${Number(v).toFixed(2)}亿`
                 : '--';
 
@@ -583,25 +550,29 @@ async function loadNorthMoney() {
                         <div class="text-base font-bold ${netColor(szNet)}">${fmt(szNet)}</div>
                     </div>
                 </div>
-                <div class="text-xs text-gray-400 mt-1 text-right">
-                    交易日：${tradeDate || '--'}
-                    <span class="ml-1 text-gray-300">· 字段: ${ff.join(',')}</span>
-                </div>
+                <div class="text-xs text-gray-400 mt-1 text-right">截至 ${today.time || '--'}</div>
             `;
 
             // ---- 右侧：近5日趋势图 ----
-            const northIdx = ff.findIndex(f => ['north_money','north_net','north'].includes(f));
-            const dateIdx  = ff.indexOf('trade_date');
+            let labels, values;
 
-            const recent5 = flowData.items.slice(0, 5).reverse();
-            const labels  = recent5.map(r => {
-                const d = String(r[dateIdx] || '');
-                return d.length === 8 ? `${d.slice(4,6)}/${d.slice(6,8)}` : d;
-            });
-            const values  = recent5.map(r => northIdx >= 0 ? (parseFloat(r[northIdx]) || 0) : 0);
+            if (history && history.length >= 2) {
+                // 有历史数据：用日历史
+                const recent5 = history.slice(0, 5).reverse();
+                labels = recent5.map(r => r.date.slice(5)); // MM-DD
+                values = recent5.map(r => r.north);
+            } else {
+                // 无历史：用当日分钟级数据（最近20分钟）
+                const minuteAll = northRes.minuteData?.all || [];
+                const sampled = minuteAll.length > 6
+                    ? minuteAll.filter((_, i) => i % Math.ceil(minuteAll.length / 6) === 0).slice(0, 6)
+                    : minuteAll;
+                labels = sampled.map(r => r.time);
+                values = sampled.map(r => r.value);
+            }
 
             const canvas = document.getElementById('northChart');
-            if (canvas) {
+            if (canvas && labels.length > 0) {
                 if (northChart) northChart.destroy();
                 const ctx = canvas.getContext('2d');
                 northChart = new Chart(ctx, {
@@ -631,10 +602,7 @@ async function loadNorthMoney() {
                         scales: {
                             y: {
                                 grid: { color: 'rgba(0,0,0,0.05)' },
-                                ticks: {
-                                    font: { size: 11 },
-                                    callback: v => `${v}亿`
-                                }
+                                ticks: { font: { size: 11 }, callback: v => `${v}亿` }
                             },
                             x: {
                                 grid: { display: false },
@@ -645,13 +613,50 @@ async function loadNorthMoney() {
                 });
             }
         } else {
-            const reason = flowData ? `字段: ${JSON.stringify(flowData.fields)}, 条数: ${flowData.items?.length}` : '返回null';
-            dataDiv.innerHTML = `<div class="text-center py-4 text-gray-400 text-sm">暂无北向资金数据<br><span class="text-xs">${reason}</span></div>`;
+            // 东方财富失败，尝试 Tushare 备用
+            const flowData = await fetchFinanceData('moneyflow_hsgt', {});
+            if (flowData && flowData.items && flowData.items.length > 0) {
+                const ff = flowData.fields;
+                const latest = flowData.items[0];
+                const findField = (...candidates) => {
+                    for (const name of candidates) {
+                        const idx = ff.indexOf(name);
+                        if (idx !== -1) return latest[idx];
+                    }
+                    return null;
+                };
+                const tradeDate = findField('trade_date');
+                const northNet  = findField('north_money', 'north_net') ?? 0;
+                const shNet     = findField('sh_money', 'hgt_net') ?? 0;
+                const szNet     = findField('sz_money', 'sgt_net') ?? 0;
+
+                const netColor = v => Number(v) >= 0 ? 'text-red-500' : 'text-green-600';
+                const fmt      = v => `${Number(v) >= 0 ? '+' : ''}${Number(v).toFixed(2)}亿`;
+
+                dataDiv.innerHTML = `
+                    <div class="grid grid-cols-3 gap-2 text-center">
+                        <div class="bg-gray-50 rounded-lg p-2">
+                            <div class="text-xs text-gray-400 mb-0.5">北向合计</div>
+                            <div class="text-base font-bold ${netColor(northNet)}">${fmt(northNet)}</div>
+                        </div>
+                        <div class="bg-gray-50 rounded-lg p-2">
+                            <div class="text-xs text-gray-400 mb-0.5">沪股通</div>
+                            <div class="text-base font-bold ${netColor(shNet)}">${fmt(shNet)}</div>
+                        </div>
+                        <div class="bg-gray-50 rounded-lg p-2">
+                            <div class="text-xs text-gray-400 mb-0.5">深股通</div>
+                            <div class="text-base font-bold ${netColor(szNet)}">${fmt(szNet)}</div>
+                        </div>
+                    </div>
+                    <div class="text-xs text-gray-400 mt-1 text-right">交易日：${tradeDate || '--'}</div>
+                `;
+            } else {
+                dataDiv.innerHTML = '<div class="text-center py-4 text-gray-400 text-sm">暂无北向资金数据</div>';
+            }
         }
 
-        // ---- 十大成交股表格 ----
+        // ---- 十大成交股表格（Tushare） ----
         if (top10Data && top10Data.items && top10Data.items.length > 0) {
-            console.log('[north] hsgt_top10 fields:', top10Data.fields);
             const tf = top10Data.fields;
             const todayItems = top10Data.items.filter(item =>
                 item[tf.indexOf('trade_date')] === top10Data.items[0][tf.indexOf('trade_date')]
@@ -670,7 +675,6 @@ async function loadNorthMoney() {
                 const change = item[changeIdx];
                 const amount = item[amountIdx];
                 const mType  = item[marketIdx];
-                // market_type: '1'=沪股通, '3'=深股通（Tushare 用字符串）
                 const market = (mType === 1 || mType === '1') ? '沪' : '深';
                 return `
                     <tr class="hover:bg-gray-50 cursor-pointer" onclick="searchStock('${code}')">
@@ -684,8 +688,7 @@ async function loadNorthMoney() {
                     </tr>`;
             }).join('');
         } else {
-            const reason = top10Data ? `条数: ${top10Data.items?.length}` : '返回null';
-            tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-gray-400 text-sm">暂无数据 (${reason})</td></tr>`;
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-gray-400 text-sm">暂无数据</td></tr>';
         }
     } catch (error) {
         console.error('加载北向资金失败:', error);
