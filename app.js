@@ -644,21 +644,16 @@ async function askGrok() {
     `;
     
     try {
-        // 使用 POST 请求
-        const requestBody = {message};
+        // 使用 GET 请求（Vercel POST 有问题）
+        const params = new URLSearchParams();
+        params.append('message', message);
         
-        // 如果有图片，添加图片数据
         if (currentImageBase64) {
-            requestBody.image = currentImageBase64;
-            requestBody.imageType = currentImageType;
+            params.append('image', currentImageBase64);
+            params.append('imageType', currentImageType);
         }
         
-        const response = await fetch('/api/grok', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(requestBody)
-        });
-        
+        const response = await fetch('/api/grok?' + params.toString());
         const data = await response.json();
         
         if (data.success) {
