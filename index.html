@@ -42,16 +42,151 @@
             animation: spin 1s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* 模态框 */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.hidden { display: none; }
+        .modal-box {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        /* 收藏按钮 */
+        .fav-btn {
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .fav-btn:hover { transform: scale(1.2); }
+        .fav-btn.favorited { color: #f59e0b; }
+
+        /* 用户下拉菜单 */
+        .user-menu { position: relative; }
+        .user-dropdown {
+            position: absolute;
+            right: 0;
+            top: calc(100% + 8px);
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            min-width: 160px;
+            z-index: 50;
+        }
+        .user-dropdown.hidden { display: none; }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
+
+    <!-- 登录/注册模态框 -->
+    <div id="authModal" class="modal-overlay hidden">
+        <div class="modal-box">
+            <!-- 标签切换 -->
+            <div class="flex gap-1 bg-gray-100 rounded-lg p-1 mb-6">
+                <button id="loginTabBtn" onclick="switchAuthTab('login')" 
+                    class="flex-1 py-2 rounded-md text-sm font-medium transition-all bg-white text-gray-900 shadow-sm">
+                    登录
+                </button>
+                <button id="signupTabBtn" onclick="switchAuthTab('signup')" 
+                    class="flex-1 py-2 rounded-md text-sm font-medium transition-all text-gray-500">
+                    注册
+                </button>
+            </div>
+
+            <!-- 登录表单 -->
+            <div id="loginForm">
+                <h2 class="text-xl font-bold text-gray-900 mb-4">欢迎回来</h2>
+                <div class="space-y-3">
+                    <input type="email" id="loginEmail" placeholder="邮箱地址"
+                        class="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                    <input type="password" id="loginPassword" placeholder="密码"
+                        class="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                </div>
+                <div id="loginError" class="text-red-500 text-sm mt-2 hidden"></div>
+                <button onclick="handleLogin()" 
+                    class="w-full mt-4 bg-blue-500 text-white rounded-lg py-2.5 font-medium hover:bg-blue-600 transition-colors">
+                    登录
+                </button>
+            </div>
+
+            <!-- 注册表单 -->
+            <div id="signupForm" class="hidden">
+                <h2 class="text-xl font-bold text-gray-900 mb-4">创建账号</h2>
+                <div class="space-y-3">
+                    <input type="email" id="signupEmail" placeholder="邮箱地址"
+                        class="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                    <input type="password" id="signupPassword" placeholder="密码（至少6位）"
+                        class="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                    <input type="password" id="signupPasswordConfirm" placeholder="确认密码"
+                        class="w-full border border-gray-300 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                </div>
+                <div id="signupError" class="text-red-500 text-sm mt-2 hidden"></div>
+                <div id="signupSuccess" class="text-green-600 text-sm mt-2 hidden"></div>
+                <button onclick="handleSignup()" 
+                    class="w-full mt-4 bg-blue-500 text-white rounded-lg py-2.5 font-medium hover:bg-blue-600 transition-colors">
+                    注册
+                </button>
+            </div>
+
+            <button onclick="closeAuthModal()" 
+                class="w-full mt-3 text-gray-500 text-sm hover:text-gray-700 transition-colors">
+                取消
+            </button>
+        </div>
+    </div>
+
     <!-- Header -->
     <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 py-4">
             <div class="flex items-center justify-between">
                 <h1 class="text-2xl font-bold text-gray-900">📈 股票资讯</h1>
-                <div class="text-sm text-gray-500">
-                    <span id="currentTime"></span>
+                <div class="flex items-center gap-4">
+                    <span class="text-sm text-gray-500" id="currentTime"></span>
+                    <!-- 未登录 -->
+                    <div id="authBtnGroup">
+                        <button onclick="openAuthModal('login')" 
+                            class="text-sm text-blue-500 hover:text-blue-600 font-medium">
+                            登录 / 注册
+                        </button>
+                    </div>
+                    <!-- 已登录 -->
+                    <div id="userMenuGroup" class="user-menu hidden">
+                        <button onclick="toggleUserMenu()" 
+                            class="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900">
+                            <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-medium text-xs" id="userAvatar">
+                                U
+                            </div>
+                            <span id="userEmailDisplay" class="max-w-32 truncate"></span>
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+                        <div id="userDropdown" class="user-dropdown hidden">
+                            <div class="px-4 py-3 border-b border-gray-100">
+                                <div class="text-xs text-gray-500">当前账号</div>
+                                <div class="text-sm font-medium text-gray-900 truncate" id="userEmailFull"></div>
+                            </div>
+                            <button onclick="switchToFavTab()" 
+                                class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                                ⭐ 我的收藏
+                            </button>
+                            <button onclick="handleLogout()" 
+                                class="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 flex items-center gap-2 border-t border-gray-100">
+                                退出登录
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -97,6 +232,9 @@
             <button class="tab-btn bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-all" data-tab="grok">
                 🤖 Grok AI
             </button>
+            <button id="favTabBtn" class="tab-btn bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-all" data-tab="favorites">
+                ⭐ 我的收藏
+            </button>
         </div>
 
         <!-- Tab Content -->
@@ -121,10 +259,11 @@
                                     <th class="text-right px-4 py-3">涨跌额</th>
                                     <th class="text-right px-4 py-3">成交量(手)</th>
                                     <th class="text-right px-4 py-3">成交额(万)</th>
+                                    <th class="text-right px-4 py-3">收藏</th>
                                 </tr>
                             </thead>
                             <tbody id="rankingBody" class="text-sm divide-y divide-gray-100">
-                                <tr><td colspan="6" class="loading"></td></tr>
+                                <tr><td colspan="7" class="loading"></td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -223,6 +362,31 @@
                 <div id="grokResult" class="card p-6">
                     <div class="text-center text-gray-400">
                         输入问题开始与 Grok AI 对话，支持上传图片进行视觉分析
+                    </div>
+                </div>
+            </div>
+
+            <!-- Favorites Tab -->
+            <div id="favoritesTab" class="tab-panel hidden">
+                <!-- 未登录状态 -->
+                <div id="favLoginRequired" class="card p-12 text-center">
+                    <div class="text-5xl mb-4">⭐</div>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-2">登录后查看收藏</h3>
+                    <p class="text-gray-500 text-sm mb-6">登录账号，随时随地访问你收藏的股票</p>
+                    <button onclick="openAuthModal('login')" 
+                        class="bg-blue-500 text-white px-6 py-2.5 rounded-lg hover:bg-blue-600 transition-colors font-medium">
+                        立即登录
+                    </button>
+                </div>
+
+                <!-- 已登录状态 -->
+                <div id="favContent" class="hidden">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900">我的收藏 <span id="favCount" class="text-sm font-normal text-gray-500"></span></h3>
+                        <button onclick="loadFavorites()" class="text-sm text-blue-500 hover:text-blue-600">刷新</button>
+                    </div>
+                    <div id="favList" class="space-y-3">
+                        <div class="loading"></div>
                     </div>
                 </div>
             </div>

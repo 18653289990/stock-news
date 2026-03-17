@@ -148,9 +148,11 @@ async function loadRanking(type = 'up') {
             tbody.innerHTML = filteredItems.map(item => {
                 const name = item[nameIdx];
                 const code = item[codeIdx].split('.')[0];
+                const tsCode = item[codeIdx];
                 const close = item[closeIdx];
                 const pctChg = item[pctIdx];
                 const amount = item[amountIdx];
+                const favored = isFavorited(tsCode);
                 
                 return `
                     <tr class="hover:bg-gray-50 cursor-pointer" onclick="searchStock('${code}')">
@@ -163,6 +165,13 @@ async function loadRanking(type = 'up') {
                         <td class="text-right px-4 py-3 ${pctChg >= 0 ? 'stock-up' : 'stock-down'}">${formatNumber(close * pctChg / 100)}</td>
                         <td class="text-right px-4 py-3 text-gray-600">--</td>
                         <td class="text-right px-4 py-3 text-gray-600">${formatVolume(amount)}</td>
+                        <td class="text-right px-4 py-3">
+                            <button class="fav-btn ${favored ? 'favorited' : ''}" data-code="${tsCode}"
+                                onclick="event.stopPropagation(); ${favored ? `removeFavorite('${tsCode}','${name}')` : `addFavorite('${tsCode}','${name}')`}"
+                                title="${favored ? '取消收藏' : '收藏'}">
+                                ${favored ? '⭐' : '☆'}
+                            </button>
+                        </td>
                     </tr>
                 `;
             }).join('');
@@ -229,12 +238,20 @@ async function searchStock(code = null) {
             
             const basicData = await fetchFinanceData('stock_basic', { ts_code: searchCode });
             const name = basicData?.items?.[0]?.[basicData.fields.indexOf('name')] || searchCode;
+            const favored = isFavorited(searchCode);
             
             resultDiv.innerHTML = `
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
                     <div>
                         <div class="text-sm text-gray-500 mb-1">股票名称</div>
-                        <div class="text-xl font-bold text-gray-900">${name}</div>
+                        <div class="flex items-center gap-2">
+                            <div class="text-xl font-bold text-gray-900">${name}</div>
+                            <button class="fav-btn text-xl ${favored ? 'favorited' : ''}" data-code="${searchCode}"
+                                onclick="${favored ? `removeFavorite('${searchCode}','${name}')` : `addFavorite('${searchCode}','${name}')`}"
+                                title="${favored ? '取消收藏' : '收藏此股票'}">
+                                ${favored ? '⭐' : '☆'}
+                            </button>
+                        </div>
                         <div class="text-sm text-gray-400">${searchCode.split('.')[0]}</div>
                     </div>
                     <div>
@@ -472,6 +489,9 @@ function switchTab(tabName) {
         case 'news':
             loadNews();
             break;
+        case 'favorites':
+            renderFavoritesTab();
+            break;
     }
 }
 
@@ -504,14 +524,431 @@ document.addEventListener('DOMContentLoaded', function() {
         if (e.key === 'Enter') askGrok();
     });
 
-    setInterval(() => {
-        loadMarketIndex();
-        const activeTab = document.querySelector('.tab-active').dataset.tab;
-        if (activeTab === 'ranking') {
-            loadRanking(currentRankType);
+// ========== 认证状态管理 ==========
+let currentUser = null;
+let authToken = null;
+let userFavorites = []; // 缓存收藏列表
+
+function initAuth() {
+    // 从 localStorage 恢复登录状态
+    const savedToken = localStorage.getItem('auth_token');
+    const savedUser = localStorage.getItem('auth_user');
+    if (savedToken && savedUser) {
+        authToken = savedToken;
+        currentUser = JSON.parse(savedUser);
+        updateAuthUI();
+        // 后台验证 token 是否还有效
+        verifyToken();
+    }
+}
+
+async function verifyToken() {
+    try {
+        const res = await fetch('/api/auth?action=me', {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await res.json();
+        if (!data.success) {
+            // token 过期，清除状态
+            clearAuthState();
         }
-    }, 60000);
-});
+    } catch (e) {
+        // 网络问题，保持现状
+    }
+}
+
+function updateAuthUI() {
+    const btnGroup = document.getElementById('authBtnGroup');
+    const userGroup = document.getElementById('userMenuGroup');
+
+    if (currentUser) {
+        btnGroup.classList.add('hidden');
+        userGroup.classList.remove('hidden');
+        const email = currentUser.email || '';
+        document.getElementById('userEmailDisplay').textContent = email;
+        document.getElementById('userEmailFull').textContent = email;
+        document.getElementById('userAvatar').textContent = email.charAt(0).toUpperCase();
+    } else {
+        btnGroup.classList.remove('hidden');
+        userGroup.classList.add('hidden');
+    }
+}
+
+function clearAuthState() {
+    currentUser = null;
+    authToken = null;
+    userFavorites = [];
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('auth_user');
+    updateAuthUI();
+}
+
+// ========== 模态框控制 ==========
+let currentAuthTab = 'login';
+
+function openAuthModal(tab = 'login') {
+    document.getElementById('authModal').classList.remove('hidden');
+    switchAuthTab(tab);
+}
+
+function closeAuthModal() {
+    document.getElementById('authModal').classList.add('hidden');
+    // 清空输入
+    ['loginEmail','loginPassword','signupEmail','signupPassword','signupPasswordConfirm'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    document.getElementById('loginError').classList.add('hidden');
+    document.getElementById('signupError').classList.add('hidden');
+    document.getElementById('signupSuccess').classList.add('hidden');
+}
+
+function switchAuthTab(tab) {
+    currentAuthTab = tab;
+    const loginForm = document.getElementById('loginForm');
+    const signupForm = document.getElementById('signupForm');
+    const loginBtn = document.getElementById('loginTabBtn');
+    const signupBtn = document.getElementById('signupTabBtn');
+
+    if (tab === 'login') {
+        loginForm.classList.remove('hidden');
+        signupForm.classList.add('hidden');
+        loginBtn.classList.add('bg-white', 'text-gray-900', 'shadow-sm');
+        loginBtn.classList.remove('text-gray-500');
+        signupBtn.classList.remove('bg-white', 'text-gray-900', 'shadow-sm');
+        signupBtn.classList.add('text-gray-500');
+    } else {
+        signupForm.classList.remove('hidden');
+        loginForm.classList.add('hidden');
+        signupBtn.classList.add('bg-white', 'text-gray-900', 'shadow-sm');
+        signupBtn.classList.remove('text-gray-500');
+        loginBtn.classList.remove('bg-white', 'text-gray-900', 'shadow-sm');
+        loginBtn.classList.add('text-gray-500');
+    }
+}
+
+// ========== 登录 ==========
+async function handleLogin() {
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    const errEl = document.getElementById('loginError');
+
+    errEl.classList.add('hidden');
+
+    if (!email || !password) {
+        errEl.textContent = '请填写邮箱和密码';
+        errEl.classList.remove('hidden');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/auth?action=login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            authToken = data.session?.access_token;
+            currentUser = data.user;
+            localStorage.setItem('auth_token', authToken);
+            localStorage.setItem('auth_user', JSON.stringify(currentUser));
+            updateAuthUI();
+            closeAuthModal();
+            // 预加载收藏列表
+            loadFavoritesData();
+        } else {
+            errEl.textContent = data.error || '登录失败，请检查邮箱和密码';
+            errEl.classList.remove('hidden');
+        }
+    } catch (e) {
+        errEl.textContent = '网络错误，请稍后重试';
+        errEl.classList.remove('hidden');
+    }
+}
+
+// ========== 注册 ==========
+async function handleSignup() {
+    const email = document.getElementById('signupEmail').value.trim();
+    const password = document.getElementById('signupPassword').value;
+    const confirm = document.getElementById('signupPasswordConfirm').value;
+    const errEl = document.getElementById('signupError');
+    const successEl = document.getElementById('signupSuccess');
+
+    errEl.classList.add('hidden');
+    successEl.classList.add('hidden');
+
+    if (!email || !password) {
+        errEl.textContent = '请填写邮箱和密码';
+        errEl.classList.remove('hidden');
+        return;
+    }
+    if (password.length < 6) {
+        errEl.textContent = '密码至少需要6位';
+        errEl.classList.remove('hidden');
+        return;
+    }
+    if (password !== confirm) {
+        errEl.textContent = '两次密码输入不一致';
+        errEl.classList.remove('hidden');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/auth?action=signup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            if (data.session) {
+                // 直接登录
+                authToken = data.session.access_token;
+                currentUser = data.user;
+                localStorage.setItem('auth_token', authToken);
+                localStorage.setItem('auth_user', JSON.stringify(currentUser));
+                updateAuthUI();
+                closeAuthModal();
+            } else {
+                // 需要邮件验证
+                successEl.textContent = '注册成功！请查收验证邮件后登录';
+                successEl.classList.remove('hidden');
+            }
+        } else {
+            errEl.textContent = data.error || '注册失败，请稍后重试';
+            errEl.classList.remove('hidden');
+        }
+    } catch (e) {
+        errEl.textContent = '网络错误，请稍后重试';
+        errEl.classList.remove('hidden');
+    }
+}
+
+// ========== 退出 ==========
+async function handleLogout() {
+    document.getElementById('userDropdown').classList.add('hidden');
+    try {
+        await fetch('/api/auth?action=logout', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+    } catch (e) { /* 忽略错误 */ }
+    clearAuthState();
+}
+
+function toggleUserMenu() {
+    document.getElementById('userDropdown').classList.toggle('hidden');
+}
+
+function switchToFavTab() {
+    document.getElementById('userDropdown').classList.add('hidden');
+    switchTab('favorites');
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('tab-active');
+        btn.classList.add('bg-gray-100', 'text-gray-700');
+    });
+    const favBtn = document.querySelector('.tab-btn[data-tab="favorites"]');
+    if (favBtn) {
+        favBtn.classList.add('tab-active');
+        favBtn.classList.remove('bg-gray-100', 'text-gray-700');
+    }
+}
+
+// ========== 收藏功能 ==========
+
+// 渲染收藏 Tab 主界面
+function renderFavoritesTab() {
+    const loginRequired = document.getElementById('favLoginRequired');
+    const favContent = document.getElementById('favContent');
+
+    if (!currentUser) {
+        loginRequired.classList.remove('hidden');
+        favContent.classList.add('hidden');
+    } else {
+        loginRequired.classList.add('hidden');
+        favContent.classList.remove('hidden');
+        loadFavorites();
+    }
+}
+
+// 从服务端加载收藏列表
+async function loadFavorites() {
+    if (!currentUser || !authToken) return;
+
+    const listDiv = document.getElementById('favList');
+    listDiv.innerHTML = '<div class="loading"></div>';
+
+    try {
+        const res = await fetch('/api/favorites', {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            userFavorites = data.data || [];
+            renderFavoritesList();
+        } else {
+            listDiv.innerHTML = `<div class="text-center text-gray-400 py-8">${data.error || '加载失败'}</div>`;
+        }
+    } catch (e) {
+        listDiv.innerHTML = '<div class="text-center text-gray-400 py-8">加载失败，请稍后重试</div>';
+    }
+}
+
+// 仅加载数据到缓存（不更新 UI）
+async function loadFavoritesData() {
+    if (!currentUser || !authToken) return;
+    try {
+        const res = await fetch('/api/favorites', {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await res.json();
+        if (data.success) {
+            userFavorites = data.data || [];
+        }
+    } catch (e) { /* 忽略 */ }
+}
+
+function renderFavoritesList() {
+    const listDiv = document.getElementById('favList');
+    const countEl = document.getElementById('favCount');
+    countEl.textContent = `(${userFavorites.length} 只)`;
+
+    if (userFavorites.length === 0) {
+        listDiv.innerHTML = `
+            <div class="card p-12 text-center">
+                <div class="text-5xl mb-4">📋</div>
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">还没有收藏</h3>
+                <p class="text-gray-500 text-sm">在涨跌幅排行或个股查询中点击 ⭐ 收藏股票</p>
+            </div>
+        `;
+        return;
+    }
+
+    listDiv.innerHTML = userFavorites.map(fav => `
+        <div class="card p-4 flex items-center justify-between hover:shadow-md transition-shadow cursor-pointer"
+             onclick="searchStock('${fav.ts_code.split('.')[0]}')">
+            <div class="flex items-center gap-4">
+                <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-sm">
+                    ${fav.name.charAt(0)}
+                </div>
+                <div>
+                    <div class="font-semibold text-gray-900">${fav.name}</div>
+                    <div class="text-sm text-gray-400">${fav.ts_code}</div>
+                    ${fav.note ? `<div class="text-xs text-gray-500 mt-0.5">${fav.note}</div>` : ''}
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="text-xs text-gray-400">${new Date(fav.created_at).toLocaleDateString('zh-CN')}</div>
+                <button onclick="event.stopPropagation(); removeFavorite('${fav.ts_code}', '${fav.name}')"
+                    class="text-red-400 hover:text-red-600 transition-colors p-1" title="取消收藏">
+                    🗑️
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+// 检查某只股票是否已收藏
+function isFavorited(tsCode) {
+    return userFavorites.some(f => f.ts_code === tsCode);
+}
+
+// 添加收藏
+async function addFavorite(tsCode, name) {
+    if (!currentUser) {
+        openAuthModal('login');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/favorites', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({ ts_code: tsCode, name })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            userFavorites.push(data.data);
+            updateFavBtns(tsCode, true);
+            showToast(`已收藏 ${name}`);
+        } else {
+            showToast(data.error === '已在收藏列表中' ? `${name} 已在收藏列表` : data.error, 'error');
+        }
+    } catch (e) {
+        showToast('操作失败，请重试', 'error');
+    }
+}
+
+// 删除收藏
+async function removeFavorite(tsCode, name) {
+    if (!currentUser || !authToken) return;
+
+    try {
+        const res = await fetch('/api/favorites', {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({ ts_code: tsCode })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            userFavorites = userFavorites.filter(f => f.ts_code !== tsCode);
+            updateFavBtns(tsCode, false);
+            showToast(`已取消收藏 ${name}`);
+            // 如果当前在收藏 tab，重新渲染列表
+            const favTab = document.getElementById('favoritesTab');
+            if (!favTab.classList.contains('hidden')) {
+                renderFavoritesList();
+            }
+        } else {
+            showToast(data.error || '操作失败', 'error');
+        }
+    } catch (e) {
+        showToast('操作失败，请重试', 'error');
+    }
+}
+
+// 更新页面中所有相同股票的收藏按钮状态
+function updateFavBtns(tsCode, favorited) {
+    document.querySelectorAll(`.fav-btn[data-code="${tsCode}"]`).forEach(btn => {
+        if (favorited) {
+            btn.textContent = '⭐';
+            btn.classList.add('favorited');
+            btn.title = '取消收藏';
+        } else {
+            btn.textContent = '☆';
+            btn.classList.remove('favorited');
+            btn.title = '收藏';
+        }
+    });
+}
+
+// Toast 提示
+function showToast(msg, type = 'success') {
+    const existing = document.getElementById('toast');
+    if (existing) existing.remove();
+
+    const toast = document.createElement('div');
+    toast.id = 'toast';
+    toast.className = `fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-2.5 rounded-full text-sm font-medium text-white z-50 transition-all shadow-lg ${
+        type === 'error' ? 'bg-red-500' : 'bg-gray-800'
+    }`;
+    toast.textContent = msg;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 2500);
+}
+
 
 // ========== Grok AI 图片处理 ==========
 let currentImageBase64 = null;
