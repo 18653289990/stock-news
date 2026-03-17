@@ -6,8 +6,25 @@ export default async function handler(req, res) {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
+  const coins = [
+    { id: 'bitcoin',      symbol: 'BTC',  name: 'Bitcoin' },
+    { id: 'ethereum',     symbol: 'ETH',  name: 'Ethereum' },
+    { id: 'solana',       symbol: 'SOL',  name: 'Solana' },
+    { id: 'binancecoin',  symbol: 'BNB',  name: 'BNB' },
+    { id: 'ripple',       symbol: 'XRP',  name: 'XRP' },
+    { id: 'cardano',      symbol: 'ADA',  name: 'Cardano' },
+    { id: 'dogecoin',     symbol: 'DOGE', name: 'Dogecoin' },
+    { id: 'avalanche-2',  symbol: 'AVAX', name: 'Avalanche' },
+    { id: 'polkadot',     symbol: 'DOT',  name: 'Polkadot' },
+    { id: 'chainlink',    symbol: 'LINK', name: 'Chainlink' },
+    { id: 'uniswap',      symbol: 'UNI',  name: 'Uniswap' },
+    { id: 'litecoin',     symbol: 'LTC',  name: 'Litecoin' },
+  ];
+
+  const ids = coins.map(c => c.id).join(',');
+
   try {
-    const url = 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana,binancecoin&vs_currencies=usd&include_24hr_change=true';
+    const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`;
     const response = await fetch(url, {
       headers: { 'Accept': 'application/json' }
     });
@@ -17,13 +34,6 @@ export default async function handler(req, res) {
     }
 
     const data = await response.json();
-
-    const coins = [
-      { id: 'bitcoin',     symbol: 'BTC', name: 'Bitcoin' },
-      { id: 'ethereum',    symbol: 'ETH', name: 'Ethereum' },
-      { id: 'solana',      symbol: 'SOL', name: 'Solana' },
-      { id: 'binancecoin', symbol: 'BNB', name: 'BNB' },
-    ];
 
     const items = coins.map(c => ({
       symbol: c.symbol,

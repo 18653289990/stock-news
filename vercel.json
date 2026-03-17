@@ -8,6 +8,14 @@
       "dest": "/api/$1"
     },
     {
+      "src": "/crypto.html",
+      "dest": "/crypto.html"
+    },
+    {
+      "src": "/crypto.js",
+      "dest": "/crypto.js"
+    },
+    {
       "src": "/(.*\\.(js|css|png|jpg|ico|svg|woff|woff2|ttf))",
       "dest": "/$1"
     },

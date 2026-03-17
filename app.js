@@ -579,12 +579,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(updateTime, 1000);
 
     loadMarketIndex();
-    loadCrypto();
-    loadJinse();
     loadRanking('up');
-
-    // 初始化图片上传功能
-    initImageUpload();
 
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => switchTab(btn.dataset.tab));
@@ -599,22 +594,13 @@ document.addEventListener('DOMContentLoaded', function() {
         if (e.key === 'Enter') searchStock();
     });
 
-    document.getElementById('grokBtn').addEventListener('click', () => askGrok());
-    document.getElementById('grokInput').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') askGrok();
-    });
-
     setInterval(() => {
         loadMarketIndex();
-        loadCrypto();
         const activeTab = document.querySelector('.tab-active').dataset.tab;
         if (activeTab === 'ranking') {
             loadRanking(currentRankType);
         }
     }, 60000);
-
-    // 金色快讯每5分钟刷新
-    setInterval(loadJinse, 5 * 60 * 1000);
 
     // 初始化认证状态
     initAuth();
