@@ -725,17 +725,21 @@ async function handleSignup() {
 
         if (data.success) {
             if (data.session) {
-                // 直接登录
+                // 注册后直接登录
                 authToken = data.session.access_token;
                 currentUser = data.user;
                 localStorage.setItem('auth_token', authToken);
                 localStorage.setItem('auth_user', JSON.stringify(currentUser));
                 updateAuthUI();
                 closeAuthModal();
+                showToast('注册成功，已自动登录');
+                loadFavoritesData();
             } else {
-                // 需要邮件验证
-                successEl.textContent = '注册成功！请查收验证邮件后登录';
+                // 理论上不应走到这里（已关闭邮件验证）
+                successEl.textContent = '注册成功！请登录';
                 successEl.classList.remove('hidden');
+                // 自动切换到登录 tab
+                setTimeout(() => switchAuthTab('login'), 1500);
             }
         } else {
             errEl.textContent = data.error || '注册失败，请稍后重试';
