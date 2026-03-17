@@ -1185,6 +1185,20 @@ function initImageUpload() {
 }
 
 // ========== 今日推荐操作 ==========
+
+// 控制成本价输入框的显示/隐藏
+function updateCostPriceVisibility() {
+    const holdingStatus = document.querySelector('input[name="holdingStatus"]:checked').value;
+    const costPriceContainer = document.getElementById('costPriceContainer');
+    
+    if (holdingStatus === '已持有') {
+        costPriceContainer.classList.remove('hidden');
+    } else {
+        costPriceContainer.classList.add('hidden');
+        document.getElementById('costPrice').value = '';
+    }
+}
+
 async function getTradeRecommendation() {
     const input = document.getElementById('recInput').value.trim();
     const resultDiv = document.getElementById('recResult');
@@ -1197,6 +1211,7 @@ async function getTradeRecommendation() {
     // 获取持仓状态和交易周期
     const holdingStatus = document.querySelector('input[name="holdingStatus"]:checked').value;
     const timeframe = document.getElementById('timeframe').value;
+    const costPrice = document.getElementById('costPrice').value;
     
     // 显示加载状态
     resultDiv.innerHTML = `
@@ -1220,16 +1235,24 @@ async function getTradeRecommendation() {
             // 市场数据获取失败，继续使用原始输入
         }
         
-        // 准备 Grok 提示词，融入持仓状态和交易周期
-        const prompt = `我输入的股票代码是：${input}。
+        // 准备 Grok 提示词，融入持仓状态、交易周期和成本价（如有）
+        let prompt = `我输入的股票代码是：${input}。
 我的持仓状态是：${holdingStatus}
-我的交易周期是：${timeframe}
+我的交易周期是：${timeframe}`;
+        
+        // 如果已持有且输入了成本价，加入提示词
+        if (holdingStatus === '已持有' && costPrice) {
+            prompt += `
+我的成本价是：${costPrice}元`;
+        }
+        
+        prompt += `
 
-请你分析这只股票，然后直接告诉我，如果是你（考虑我的持仓状态和${timeframe}交易周期），你今天的操作是买入，卖出，还是继续持有或观望。
+请你分析这只股票${holdingStatus === '已持有' && costPrice ? `（当前价格对比我的成本价${costPrice}元）` : ''}，然后直接告诉我，如果是你（考虑我的持仓状态和${timeframe}交易周期）${holdingStatus === '已持有' ? '，是否应该加仓、减仓或继续持有；如果未持有' : ''}，你今天的操作是买入，卖出，还是继续持有或观望。
 
 请用以下格式回答：
-【建议】买入/卖出/持有/观望
-【理由】[你的分析理由，不超过3行]`;
+【建议】${holdingStatus === '已持有' ? '加仓/减仓/持有' : '买入/卖出/持有/观望'}
+【理由】[你的详细分析理由，包括技术面、基本面等，可以3-5行]`;
         
         // 调用 Grok API，指定使用 grok-4-latest 模型
         const response = await fetch('/api/grok', {
@@ -1247,7 +1270,7 @@ async function getTradeRecommendation() {
                 .replace(/\n\n/g, '</p><p class="mb-3">')
                 .replace(/\n/g, '<br>')
                 .replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-blue-600">$1</strong>')
-                .replace(/【建议】(买入|卖出|持有|观望)/g, '<div class="text-lg font-bold mt-3 mb-2">【建议】<span class="$1-color">$1</span></div>')
+                .replace(/【建议】(买入|卖出|持有|观望|加仓|减仓)/g, '<div class="text-lg font-bold mt-3 mb-2">【建议】<span class="$1-color">$1</span></div>')
                 .replace(/【理由】/g, '<div class="text-sm font-semibold text-gray-700 mt-2">【理由】</div><div class="text-sm text-gray-600 leading-relaxed">');
             
             resultDiv.innerHTML = `
@@ -1267,6 +1290,10 @@ async function getTradeRecommendation() {
                                 <span class="text-gray-500">周期：</span>
                                 <span class="font-bold text-gray-900">${timeframe}</span>
                             </div>
+                            ${costPrice ? `<div class="text-sm">
+                                <span class="text-gray-500">成本价：</span>
+                                <span class="font-bold text-gray-900">${costPrice}元</span>
+                            </div>` : ''}
                         </div>
                     </div>
                     <div class="bg-white rounded-lg p-3 md:p-4 border border-gray-200">
