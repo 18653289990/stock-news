@@ -1208,13 +1208,7 @@ async function getTradeRecommendation() {
         }
         
         // 准备 Grok 提示词
-        const prompt = `我输入的是股票代码或名称：${input}。请你分析这只股票，然后直接告诉我，如果是你，你今天的操作是什么？
-
-请从以下选项中选一个，并给出简明理由（不超过3行）：
-1. **买入** - 如果你认为这只股票有上涨潜力
-2. **卖出** - 如果你认为这只股票应该平仓
-3. **持有** - 如果你认为这只股票应该继续持仓
-4. **观望** - 如果你认为这只股票还需要进一步观察
+        const prompt = `我输入股票代码是：${input}。请你分析完直接告诉我，如果是你，你今天的操作是买入，卖出，还是继续持有或观望。
 
 请用以下格式回答：
 【建议】买入/卖出/持有/观望
@@ -1240,18 +1234,18 @@ async function getTradeRecommendation() {
                 .replace(/【理由】/g, '<div class="text-sm font-semibold text-gray-700 mt-2">【理由】</div><div class="text-sm text-gray-600 leading-relaxed">');
             
             resultDiv.innerHTML = `
-                <div class="space-y-4">
-                    <div class="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4 border border-blue-100">
+                <div class="space-y-4 px-2 md:px-0">
+                    <div class="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-3 md:p-4 border border-blue-100">
                         <div class="text-sm text-gray-600 mb-2">📊 股票分析对象</div>
-                        <div class="text-lg font-bold text-gray-900">${input}</div>
+                        <div class="text-lg font-bold text-gray-900 truncate">${input}</div>
                     </div>
-                    <div class="bg-white rounded-lg p-4 border border-gray-200">
-                        <div class="flex items-start gap-3">
+                    <div class="bg-white rounded-lg p-3 md:p-4 border border-gray-200">
+                        <div class="flex items-start gap-2 md:gap-3">
                             <div class="flex-shrink-0 w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center mt-0.5">
                                 <span class="text-white text-xs font-bold">G</span>
                             </div>
-                            <div class="flex-1 min-w-0">
-                                <div class="text-sm leading-relaxed">${formatted}</div>
+                            <div class="flex-1 min-w-0 overflow-hidden">
+                                <div class="text-sm leading-relaxed break-words">${formatted}</div>
                                 <div class="text-xs text-gray-400 mt-3">💡 Grok AI 分析 • ${new Date().toLocaleTimeString('zh-CN')}</div>
                             </div>
                         </div>
