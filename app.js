@@ -755,28 +755,56 @@ function showFallbackNews(listDiv) {
 
 // ========== Tab 切换 ==========
 function switchTab(tabName) {
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.remove('tab-active');
-        btn.classList.add('bg-gray-100', 'text-gray-700');
-    });
-    document.querySelector(`.tab-btn[data-tab="${tabName}"]`).classList.add('tab-active');
-    document.querySelector(`.tab-btn[data-tab="${tabName}"]`).classList.remove('bg-gray-100', 'text-gray-700');
-
-    document.querySelectorAll('.tab-panel').forEach(panel => {
-        panel.classList.add('hidden');
-    });
-    document.getElementById(`${tabName}Tab`).classList.remove('hidden');
-
-    switch(tabName) {
-        case 'north':
-            loadNorthMoney();
-            break;
-        case 'news':
-            loadNews();
-            break;
-        case 'favorites':
-            renderFavoritesTab();
-            break;
+    try {
+        // 移除所有按钮的活跃状态
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.remove('tab-active');
+            btn.classList.add('bg-gray-100', 'text-gray-700');
+        });
+        
+        // 激活当前按钮
+        const activeBtn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+        if (activeBtn) {
+            activeBtn.classList.add('tab-active');
+            activeBtn.classList.remove('bg-gray-100', 'text-gray-700');
+        } else {
+            console.warn(`Tab button not found for: ${tabName}`);
+        }
+        
+        // 隐藏所有面板
+        document.querySelectorAll('.tab-panel').forEach(panel => {
+            panel.classList.add('hidden');
+        });
+        
+        // 显示目标面板
+        const targetPanel = document.getElementById(`${tabName}Tab`);
+        if (targetPanel) {
+            targetPanel.classList.remove('hidden');
+        } else {
+            console.warn(`Tab panel not found for: ${tabName}Tab`);
+            return;
+        }
+        
+        // 加载对应 tab 的数据
+        switch(tabName) {
+            case 'north':
+                loadNorthMoney();
+                break;
+            case 'news':
+                loadNews();
+                break;
+            case 'favorites':
+                renderFavoritesTab();
+                break;
+            case 'recommendation':
+                // 推荐操作 tab 不需要初始加载
+                break;
+            case 'search':
+                // 查询 tab 不需要初始加载
+                break;
+        }
+    } catch (error) {
+        console.error('Tab switching error:', error);
     }
 }
 
