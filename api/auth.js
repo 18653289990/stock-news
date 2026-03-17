@@ -39,8 +39,8 @@ export default async function handler(req, res) {
             if (status >= 400) {
                 const errMsg = data.msg || data.error_description || '';
                 const friendlyMsg = errMsg.includes('invalid') ? '邮箱格式不正确' :
-                                    errMsg.includes('already') ? '该邮箱已注册，请直接登录' :
-                                    errMsg.includes('rate') ? '操作过于频繁，请稍后再试' : '注册失败，请稍后重试';
+                                    errMsg.includes('already') || errMsg.includes('registered') ? '该邮箱已注册，请直接登录' :
+                                    errMsg.includes('rate') || errMsg.includes('limit') ? '验证邮件发送频率已达上限，请1小时后再试，或联系管理员' : '注册失败，请稍后重试';
                 return res.status(400).json({ error: friendlyMsg });
             }
             return res.json({ success: true, user: data.user, session: data.session });
