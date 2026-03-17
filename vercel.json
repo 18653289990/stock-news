@@ -16,6 +16,10 @@
       "dest": "/crypto.js"
     },
     {
+      "src": "/grok.html",
+      "dest": "/grok.html"
+    },
+    {
       "src": "/(.*\\.(js|css|png|jpg|ico|svg|woff|woff2|ttf))",
       "dest": "/$1"
     },

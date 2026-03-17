@@ -74,38 +74,69 @@ async function fetchFinanceData(apiName, params = {}) {
 }
 
 // ========== 大盘指数 ==========
+// 腾讯行情 symbol 映射
+const INDEX_MAP = [
+    { symbol: 'sh000001', el: ['shIndex', 'shChange'], name: '上证指数' },
+    { symbol: 'sz399001', el: ['szIndex', 'szChange'], name: '深证成指' },
+    { symbol: 'sz399006', el: ['cyIndex', 'cyChange'], name: '创业板指' }
+];
+
 async function loadMarketIndex() {
+    try {
+        const symbols = INDEX_MAP.map(i => i.symbol).join(',');
+        const res = await fetch(`/api/market?symbols=${symbols}`);
+        const data = await res.json();
+
+        if (data.success && data.items) {
+            for (const idx of INDEX_MAP) {
+                const item = data.items[idx.symbol];
+                if (!item) continue;
+                document.getElementById(idx.el[0]).textContent = formatNumber(item.price);
+                document.getElementById(idx.el[1]).innerHTML =
+                    formatPercent(item.pctChg) +
+                    ` <span class="text-gray-400">${item.change >= 0 ? '+' : ''}${formatNumber(item.change)}</span>`;
+            }
+        } else {
+            // 回退：使用 Tushare 接口
+            await loadMarketIndexFallback();
+            return;
+        }
+    } catch (e) {
+        console.error('腾讯行情加载失败，尝试回退:', e);
+        await loadMarketIndexFallback();
+        return;
+    }
+
+    document.getElementById('updateTime').textContent = '更新于 ' + new Date().toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    const footer = document.getElementById('footerUpdateTime');
+    if (footer) footer.textContent = '数据更新于: ' + new Date().toLocaleString('zh-CN');
+}
+
+// 回退方案：Tushare
+async function loadMarketIndexFallback() {
     const indices = [
         { ts_code: '000001.SH', el: ['shIndex', 'shChange'], name: '上证指数' },
         { ts_code: '399001.SZ', el: ['szIndex', 'szChange'], name: '深证成指' },
         { ts_code: '399006.SZ', el: ['cyIndex', 'cyChange'], name: '创业板指' }
     ];
-
     for (const idx of indices) {
         try {
             const data = await fetchFinanceData('index_daily', { ts_code: idx.ts_code });
             if (data && data.items && data.items[0]) {
                 const item = data.items[0];
                 const fields = data.fields;
-                
-                const closeIdx = fields.indexOf('close');
-                const changeIdx = fields.indexOf('change');
-                const pctIdx = fields.indexOf('pct_chg');
-                
-                const close = item[closeIdx];
-                const change = item[changeIdx];
-                const pctChg = item[pctIdx];
-                
+                const close = item[fields.indexOf('close')];
+                const change = item[fields.indexOf('change')];
+                const pctChg = item[fields.indexOf('pct_chg')];
                 document.getElementById(idx.el[0]).textContent = formatNumber(close);
-                document.getElementById(idx.el[1]).innerHTML = 
-                    formatPercent(pctChg) + 
+                document.getElementById(idx.el[1]).innerHTML =
+                    formatPercent(pctChg) +
                     ` <span class="text-gray-400">${change >= 0 ? '+' : ''}${formatNumber(change)}</span>`;
             }
         } catch (e) {
-            console.error('加载指数失败:', idx.name, e);
+            console.error('加载指数失败(fallback):', idx.name, e);
         }
     }
-    
     document.getElementById('updateTime').textContent = '更新于 ' + new Date().toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
     const footer = document.getElementById('footerUpdateTime');
     if (footer) footer.textContent = '数据更新于: ' + new Date().toLocaleString('zh-CN');
@@ -263,6 +294,15 @@ async function loadRanking(type = 'up') {
 }
 
 // ========== 个股查询 ==========
+// 将 ts_code 转成腾讯行情 symbol
+function tsCodeToQQSymbol(tsCode) {
+    const [code, market] = tsCode.split('.');
+    if (market === 'SH') return 'sh' + code;
+    if (market === 'SZ') return 'sz' + code;
+    if (market === 'BJ') return 'bj' + code;
+    return 'sh' + code;
+}
+
 async function searchStock(code = null) {
     const input = document.getElementById('searchInput');
     let searchCode = code || input.value.trim();
@@ -287,6 +327,91 @@ async function searchStock(code = null) {
 
     switchTab('search');
 
+    // 优先使用腾讯行情接口（更快）
+    try {
+        const qqSymbol = tsCodeToQQSymbol(searchCode);
+        const res = await fetch(`/api/market?symbols=${qqSymbol}`);
+        const data = await res.json();
+
+        if (data.success && data.items && data.items[qqSymbol]) {
+            const item = data.items[qqSymbol];
+            const name = item.name || searchCode;
+            const close = item.price;
+            const change = item.change;
+            const pctChg = item.pctChg;
+            const open = item.open;
+            const high = item.high;
+            const low = item.low;
+            const preClose = item.preClose;
+            const vol = item.vol;
+            const amount = item.amount;
+            const favored = isFavorited(searchCode);
+
+            resultDiv.innerHTML = `
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
+                    <div>
+                        <div class="text-sm text-gray-500 mb-1">股票名称</div>
+                        <div class="flex items-center gap-2">
+                            <div class="text-xl font-bold text-gray-900">${name}</div>
+                            <button class="fav-btn text-xl ${favored ? 'favorited' : ''}" data-code="${searchCode}"
+                                onclick="${favored ? `removeFavorite('${searchCode}','${name}')` : `addFavorite('${searchCode}','${name}')`}"
+                                title="${favored ? '取消收藏' : '收藏此股票'}">
+                                ${favored ? '⭐' : '☆'}
+                            </button>
+                        </div>
+                        <div class="text-sm text-gray-400">${searchCode.split('.')[0]}</div>
+                    </div>
+                    <div>
+                        <div class="text-sm text-gray-500 mb-1">最新价</div>
+                        <div class="text-2xl font-bold ${pctChg >= 0 ? 'stock-up' : 'stock-down'}">${formatNumber(close)}</div>
+                    </div>
+                    <div>
+                        <div class="text-sm text-gray-500 mb-1">涨跌幅</div>
+                        <div class="text-xl font-semibold ${pctChg >= 0 ? 'stock-up' : 'stock-down'}">${pctChg >= 0 ? '+' : ''}${formatNumber(pctChg)}%</div>
+                    </div>
+                    <div>
+                        <div class="text-sm text-gray-500 mb-1">涨跌额</div>
+                        <div class="text-xl font-semibold ${change >= 0 ? 'stock-up' : 'stock-down'}">${change >= 0 ? '+' : ''}${formatNumber(change)}</div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div class="bg-gray-50 rounded-lg p-3">
+                        <div class="text-gray-500">今开</div>
+                        <div class="font-semibold">${formatNumber(open)}</div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-3">
+                        <div class="text-gray-500">最高</div>
+                        <div class="font-semibold stock-up">${formatNumber(high)}</div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-3">
+                        <div class="text-gray-500">最低</div>
+                        <div class="font-semibold stock-down">${formatNumber(low)}</div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-3">
+                        <div class="text-gray-500">昨收</div>
+                        <div class="font-semibold">${formatNumber(preClose)}</div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-3">
+                        <div class="text-gray-500">成交量</div>
+                        <div class="font-semibold">${formatVolume(vol * 100)}</div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-3">
+                        <div class="text-gray-500">成交额</div>
+                        <div class="font-semibold">${formatVolume(amount)}</div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-3 col-span-2">
+                        <div class="text-gray-500">数据来源</div>
+                        <div class="font-semibold text-gray-400 text-xs">实时行情</div>
+                    </div>
+                </div>
+            `;
+            return;
+        }
+    } catch (e) {
+        console.log('腾讯行情接口失败，回退到 Tushare:', e);
+    }
+
+    // 回退：Tushare 接口
     try {
         const data = await fetchFinanceData('daily', { ts_code: searchCode });
         
@@ -294,25 +419,15 @@ async function searchStock(code = null) {
             const item = data.items[0];
             const fields = data.fields;
             
-            const openIdx = fields.indexOf('open');
-            const highIdx = fields.indexOf('high');
-            const lowIdx = fields.indexOf('low');
-            const closeIdx = fields.indexOf('close');
-            const preCloseIdx = fields.indexOf('pre_close');
-            const changeIdx = fields.indexOf('change');
-            const pctIdx = fields.indexOf('pct_chg');
-            const volIdx = fields.indexOf('vol');
-            const amountIdx = fields.indexOf('amount');
-            
-            const open = item[openIdx];
-            const high = item[highIdx];
-            const low = item[lowIdx];
-            const close = item[closeIdx];
-            const preClose = item[preCloseIdx];
-            const change = item[changeIdx];
-            const pctChg = item[pctIdx];
-            const vol = item[volIdx];
-            const amount = item[amountIdx];
+            const open = item[fields.indexOf('open')];
+            const high = item[fields.indexOf('high')];
+            const low = item[fields.indexOf('low')];
+            const close = item[fields.indexOf('close')];
+            const preClose = item[fields.indexOf('pre_close')];
+            const change = item[fields.indexOf('change')];
+            const pctChg = item[fields.indexOf('pct_chg')];
+            const vol = item[fields.indexOf('vol')];
+            const amount = item[fields.indexOf('amount')];
             
             const basicData = await fetchFinanceData('stock_basic', { ts_code: searchCode });
             const name = basicData?.items?.[0]?.[basicData.fields.indexOf('name')] || searchCode;
