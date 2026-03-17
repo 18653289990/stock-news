@@ -578,15 +578,6 @@ function switchTab(tabName) {
         const targetPanel = document.getElementById(`${tabName}Tab`);
         if (targetPanel) {
             targetPanel.classList.remove('hidden');
-            // 如果是推荐操作标签，自动聚焦搜索框
-            if (tabName === 'recommendation') {
-                setTimeout(() => {
-                    const recInput = document.getElementById('recInput');
-                    if (recInput) {
-                        recInput.focus();
-                    }
-                }, 100);
-            }
         } else {
             console.warn(`Tab panel not found for: ${tabName}Tab`);
             return;
