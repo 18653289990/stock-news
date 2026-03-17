@@ -1,42 +1,35 @@
-// Vercel Node.js API
-export const config = {
-  api: {
-    bodyParser: true,
-  },
-};
-
+// 测试版本 - 用 GET 请求 + URL 参数
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS, GET');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  // 支持 GET 和 POST
+  let message = '';
+  let image = null;
+  let imageType = 'jpeg';
   
-  // GET 请求用于测试
   if (req.method === 'GET') {
-    return res.status(200).json({ 
-      success: true, 
-      message: 'API 工作正常',
-      hasApiKey: !!process.env.XAI_API_KEY
-    });
-  }
-  
-  if (req.method !== 'POST') {
+    message = req.query?.message || '';
+    image = req.query?.image || null;
+    imageType = req.query?.imageType || 'jpeg';
+  } else if (req.method === 'POST') {
+    message = req.body?.message || '';
+    image = req.body?.image || null;
+    imageType = req.body?.imageType || 'jpeg';
+  } else {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
   
+  // 测试模式
+  if (!message && !image) {
+    return res.status(200).json({ 
+      success: true, 
+      message: 'API 工作正常',
+      hasApiKey: !!process.env.XAI_API_KEY,
+      method: req.method
+    });
+  }
+  
   try {
-    const body = req.body;
-    const message = body?.message || '';
-    const image = body?.image;
-    const imageType = body?.imageType || 'jpeg';
-    
-    if (!message && !image) {
-      return res.status(400).json({ success: false, error: '请输入问题或上传图片' });
-    }
-    
     const apiKey = process.env.XAI_API_KEY;
     if (!apiKey) {
       return res.status(500).json({ success: false, error: '未配置 XAI_API_KEY' });
@@ -72,7 +65,7 @@ export default async function handler(req, res) {
         messages: [
           {
             role: 'system',
-            content: '你是一个专业的财经分析助手。你擅长分析股票、基金、宏观经济等金融话题。请用中文回答问题。'
+            content: '你是一个专业的财经分析助手。请用中文回答问题。'
           },
           {
             role: 'user',
