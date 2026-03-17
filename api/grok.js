@@ -13,13 +13,20 @@ export default async function handler(req, res) {
   }
   
   try {
-    const { message, image, imageType = 'jpeg' } = req.body;
+    const { message, image, imageType = 'jpeg' } = req.body || {};
+    
+    console.log('Request body:', req.body);
+    console.log('Message:', message);
+    console.log('Has image:', !!image);
     
     if (!message && !image) {
       return res.status(400).json({ success: false, error: '请输入问题或上传图片' });
     }
     
     const apiKey = process.env.XAI_API_KEY;
+    console.log('API Key exists:', !!apiKey);
+    console.log('API Key length:', apiKey ? apiKey.length : 0);
+    
     if (!apiKey) {
       return res.status(500).json({ success: false, error: '未配置 XAI_API_KEY' });
     }
@@ -48,6 +55,7 @@ export default async function handler(req, res) {
     }
     
     const model = image ? 'grok-2-vision-1212' : 'grok-4-latest';
+    console.log('Using model:', model);
     
     // 调用 Grok API
     const response = await fetch('https://api.x.ai/v1/chat/completions', {
@@ -73,11 +81,14 @@ export default async function handler(req, res) {
       })
     });
     
+    console.log('Grok API status:', response.status);
+    
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('Grok API error:', errorText);
       return res.status(500).json({ 
         success: false, 
-        error: `Grok API 错误: ${response.status}` 
+        error: `Grok API 错误: ${response.status} - ${errorText}` 
       });
     }
     
@@ -94,7 +105,8 @@ export default async function handler(req, res) {
     console.error('Grok API Error:', error);
     return res.status(500).json({ 
       success: false, 
-      error: error.message || '服务器内部错误' 
+      error: error.message || '服务器内部错误',
+      stack: error.stack
     });
   }
 }
