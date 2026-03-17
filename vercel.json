@@ -1,16 +1,7 @@
 {
   "rewrites": [
-    {
-      "source": "/api/finance",
-      "destination": "/api/finance"
-    },
-    {
-      "source": "/api/news",
-      "destination": "/api/news"
-    },
-    {
-      "source": "/api/grok",
-      "destination": "/api/grok"
-    }
+    { "source": "/api/finance", "destination": "/api/finance" },
+    { "source": "/api/news", "destination": "/api/news" },
+    { "source": "/api/grok", "destination": "/api/grok" }
   ]
 }
