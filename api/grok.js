@@ -46,7 +46,7 @@ export default async function handler(req, res) {
 
     if (image) {
       // 有图片：使用支持视觉的模型，content 为数组格式
-      model = 'grok-4.20-beta';
+      model = 'grok-4-1-fast-non-reasoning';
       userContent = [
         {
           type: 'image_url',
@@ -61,8 +61,8 @@ export default async function handler(req, res) {
         }
       ];
     } else {
-      // 纯文本：使用 grok-3，content 为字符串格式
-      model = 'grok-3';
+      // 纯文本
+      model = 'grok-4-1-fast-non-reasoning';
       userContent = message;
     }
     
