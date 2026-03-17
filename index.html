@@ -199,6 +199,9 @@
                     <a href="/crypto.html" class="px-4 py-2 text-sm font-medium text-gray-500 border-b-2 border-transparent hover:text-gray-800 hover:border-gray-300 transition-all">
                         ₿ 加密货币
                     </a>
+                    <a href="/grok.html" class="px-4 py-2 text-sm font-medium text-gray-500 border-b-2 border-transparent hover:text-gray-800 hover:border-gray-300 transition-all">
+                        🤖 Grok AI
+                    </a>
                 </nav>
             </div>
         </div>
@@ -240,10 +243,7 @@
 
         <!-- Tabs -->
         <div class="flex gap-2 mb-6 overflow-x-auto pb-2">
-            <button class="tab-btn tab-active px-4 py-2 rounded-lg text-sm font-medium transition-all" data-tab="ranking">
-                📊 涨跌幅排行
-            </button>
-            <button class="tab-btn bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-all" data-tab="search">
+            <button class="tab-btn tab-active px-4 py-2 rounded-lg text-sm font-medium transition-all" data-tab="search">
                 🔍 个股查询
             </button>
             <button class="tab-btn bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-all" data-tab="north">
@@ -259,39 +259,8 @@
 
         <!-- Tab Content -->
         <div id="tabContent">
-            <!-- Ranking Tab -->
-            <div id="rankingTab" class="tab-panel">
-                <div class="card overflow-hidden">
-                    <div class="p-4 border-b border-gray-100">
-                        <div class="flex gap-2">
-                            <button class="rank-type-btn bg-blue-500 text-white px-3 py-1 rounded text-sm" data-type="up">涨幅榜</button>
-                            <button class="rank-type-btn bg-gray-100 text-gray-700 px-3 py-1 rounded text-sm hover:bg-gray-200" data-type="down">跌幅榜</button>
-                            <button class="rank-type-btn bg-gray-100 text-gray-700 px-3 py-1 rounded text-sm hover:bg-gray-200" data-type="turnover">成交额</button>
-                        </div>
-                    </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full">
-                            <thead class="bg-gray-50 text-xs text-gray-500">
-                                <tr>
-                                    <th class="text-left px-4 py-3">股票名称</th>
-                                    <th class="text-right px-4 py-3">最新价</th>
-                                    <th class="text-right px-4 py-3">涨跌幅</th>
-                                    <th class="text-right px-4 py-3">涨跌额</th>
-                                    <th class="text-right px-4 py-3">成交量(手)</th>
-                                    <th class="text-right px-4 py-3">成交额(万)</th>
-                                    <th class="text-right px-4 py-3">收藏</th>
-                                </tr>
-                            </thead>
-                            <tbody id="rankingBody" class="text-sm divide-y divide-gray-100">
-                                <tr><td colspan="7" class="loading"></td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
             <!-- Search Tab -->
-            <div id="searchTab" class="tab-panel hidden">
+            <div id="searchTab" class="tab-panel">
                 <div class="card p-4 mb-4">
                     <div class="flex gap-2">
                         <input type="text" id="searchInput" placeholder="输入股票代码或名称（如：000001 或 平安银行）" 

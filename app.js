@@ -558,9 +558,6 @@ function switchTab(tabName) {
     document.getElementById(`${tabName}Tab`).classList.remove('hidden');
 
     switch(tabName) {
-        case 'ranking':
-            loadRanking(currentRankType);
-            break;
         case 'north':
             loadNorthMoney();
             break;
@@ -579,14 +576,9 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(updateTime, 1000);
 
     loadMarketIndex();
-    loadRanking('up');
 
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => switchTab(btn.dataset.tab));
-    });
-
-    document.querySelectorAll('.rank-type-btn').forEach(btn => {
-        btn.addEventListener('click', () => loadRanking(btn.dataset.type));
     });
 
     document.getElementById('searchBtn').addEventListener('click', () => searchStock());
@@ -596,10 +588,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     setInterval(() => {
         loadMarketIndex();
-        const activeTab = document.querySelector('.tab-active').dataset.tab;
-        if (activeTab === 'ranking') {
-            loadRanking(currentRankType);
-        }
     }, 60000);
 
     // 初始化认证状态

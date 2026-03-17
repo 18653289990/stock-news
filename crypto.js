@@ -8,16 +8,28 @@ const MAIN_COINS = [
     { id: 'binancecoin',  symbol: 'BNB',  name: 'BNB',      icon: 'B' },
 ];
 
-// 更多列表币种
+// 更多列表币种（扩充）
 const MORE_COINS = [
-    { id: 'ripple',       symbol: 'XRP',  name: 'XRP' },
-    { id: 'cardano',      symbol: 'ADA',  name: 'Cardano' },
-    { id: 'dogecoin',     symbol: 'DOGE', name: 'Dogecoin' },
-    { id: 'avalanche-2',  symbol: 'AVAX', name: 'Avalanche' },
-    { id: 'polkadot',     symbol: 'DOT',  name: 'Polkadot' },
-    { id: 'chainlink',    symbol: 'LINK', name: 'Chainlink' },
-    { id: 'uniswap',      symbol: 'UNI',  name: 'Uniswap' },
-    { id: 'litecoin',     symbol: 'LTC',  name: 'Litecoin' },
+    { id: 'ripple',           symbol: 'XRP',   name: 'XRP' },
+    { id: 'cardano',          symbol: 'ADA',   name: 'Cardano' },
+    { id: 'dogecoin',         symbol: 'DOGE',  name: 'Dogecoin' },
+    { id: 'tron',             symbol: 'TRX',   name: 'TRON' },
+    { id: 'avalanche-2',      symbol: 'AVAX',  name: 'Avalanche' },
+    { id: 'polkadot',         symbol: 'DOT',   name: 'Polkadot' },
+    { id: 'chainlink',        symbol: 'LINK',  name: 'Chainlink' },
+    { id: 'uniswap',          symbol: 'UNI',   name: 'Uniswap' },
+    { id: 'litecoin',         symbol: 'LTC',   name: 'Litecoin' },
+    { id: 'near',             symbol: 'NEAR',  name: 'NEAR Protocol' },
+    { id: 'internet-computer',symbol: 'ICP',   name: 'Internet Computer' },
+    { id: 'aptos',            symbol: 'APT',   name: 'Aptos' },
+    { id: 'sui',              symbol: 'SUI',   name: 'Sui' },
+    { id: 'stellar',          symbol: 'XLM',   name: 'Stellar' },
+    { id: 'filecoin',         symbol: 'FIL',   name: 'Filecoin' },
+    { id: 'cosmos',           symbol: 'ATOM',  name: 'Cosmos' },
+    { id: 'hedera-hashgraph', symbol: 'HBAR',  name: 'Hedera' },
+    { id: 'injective-protocol',symbol: 'INJ',  name: 'Injective' },
+    { id: 'arbitrum',         symbol: 'ARB',   name: 'Arbitrum' },
+    { id: 'optimism',         symbol: 'OP',    name: 'Optimism' },
 ];
 
 // 保存上一次的价格，用于闪烁对比
@@ -51,6 +63,24 @@ function formatChange(pct) {
     return { html: str, cls };
 }
 
+// ========== Tab 切换 ==========
+function switchCryptoTab(tabName) {
+    document.querySelectorAll('.crypto-tab-btn').forEach(btn => {
+        btn.classList.remove('crypto-tab-active');
+        btn.classList.add('bg-gray-100', 'text-gray-700');
+        btn.classList.remove('text-white');
+    });
+    const activeBtn = document.querySelector(`.crypto-tab-btn[data-ctab="${tabName}"]`);
+    if (activeBtn) {
+        activeBtn.classList.add('crypto-tab-active');
+        activeBtn.classList.remove('bg-gray-100', 'text-gray-700');
+    }
+
+    document.querySelectorAll('.crypto-tab-panel').forEach(p => p.classList.add('hidden'));
+    const panel = document.getElementById(`cryptoTab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
+    if (panel) panel.classList.remove('hidden');
+}
+
 // ========== 加载加密货币行情 ==========
 async function loadCrypto() {
     try {
@@ -58,7 +88,7 @@ async function loadCrypto() {
         const data = await res.json();
         if (!data.success || !data.items) throw new Error('数据异常');
 
-        // 按 MAIN_COINS 顺序映射数据
+        // 按 symbol 映射数据
         const bySymbol = {};
         data.items.forEach(c => { bySymbol[c.symbol] = c; });
 
@@ -119,9 +149,7 @@ function renderCryptoCards(bySymbol) {
 function renderCryptoMore(bySymbol) {
     const container = document.getElementById('cryptoMoreList');
 
-    // 合并主要+更多的所有币种
-    const allCoins = [...MORE_COINS];
-    const rows = allCoins.map(coin => {
+    const rows = MORE_COINS.map(coin => {
         const c = bySymbol[coin.symbol];
         const price = c ? c.price : null;
         const pct = c ? c.change24h : null;
@@ -164,7 +192,7 @@ async function loadJinse() {
                 ? '<span class="inline-block bg-orange-400 text-white text-xs px-1 py-0.5 rounded mr-1.5 leading-none align-middle">快讯</span>'
                 : '';
             const timeStr = item.time ? new Date(item.time * 1000).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '';
-            return `<div class="py-1.5 flex gap-2 items-baseline">
+            return `<div class="py-2 flex gap-2 items-baseline">
                 <span class="flex-shrink-0 text-xs text-gray-400 w-10 leading-relaxed">${timeStr}</span>
                 <p class="text-xs ${gradeClass} leading-relaxed">${gradeTag}${item.content}</p>
             </div>`;
@@ -175,158 +203,6 @@ async function loadJinse() {
     }
 }
 
-// ========== Grok AI ==========
-let currentImageBase64 = null;
-let currentImageType = null;
-
-function initImageUpload() {
-    const dropZone = document.getElementById('imageDropZone');
-    const imageInput = document.getElementById('imageInput');
-    const previewContainer = document.getElementById('imagePreviewContainer');
-    const preview = document.getElementById('imagePreview');
-    const placeholder = document.getElementById('uploadPlaceholder');
-    const removeBtn = document.getElementById('removeImageBtn');
-    const imageToggle = document.getElementById('grokImageToggle');
-    const imageBar = document.getElementById('grokImageBar');
-
-    imageToggle.addEventListener('click', () => {
-        const hidden = imageBar.classList.toggle('hidden');
-        imageToggle.classList.toggle('border-purple-400', !hidden);
-        imageToggle.classList.toggle('text-purple-500', !hidden);
-    });
-
-    dropZone.addEventListener('click', () => imageInput.click());
-
-    imageInput.addEventListener('change', (e) => {
-        if (e.target.files && e.target.files[0]) handleImageFile(e.target.files[0]);
-    });
-
-    dropZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        dropZone.classList.add('border-purple-400', 'bg-purple-50');
-    });
-    dropZone.addEventListener('dragleave', (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('border-purple-400', 'bg-purple-50');
-    });
-    dropZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('border-purple-400', 'bg-purple-50');
-        if (e.dataTransfer.files && e.dataTransfer.files[0]) handleImageFile(e.dataTransfer.files[0]);
-    });
-
-    document.addEventListener('paste', (e) => {
-        const items = e.clipboardData?.items;
-        if (!items) return;
-        for (let item of items) {
-            if (item.type.startsWith('image/')) {
-                e.preventDefault();
-                imageBar.classList.remove('hidden');
-                imageToggle.classList.add('border-purple-400', 'text-purple-500');
-                handleImageFile(item.getAsFile());
-                break;
-            }
-        }
-    });
-
-    removeBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        clearImagePreview();
-    });
-
-    function handleImageFile(file) {
-        if (!file.type.match(/^image\/(jpeg|png|jpg)$/)) {
-            alert('请上传 JPG 或 PNG 格式的图片');
-            return;
-        }
-        if (file.size > 20 * 1024 * 1024) {
-            alert('图片大小不能超过 20MB');
-            return;
-        }
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const dataUrl = e.target.result;
-            preview.src = dataUrl;
-            previewContainer.classList.remove('hidden');
-            placeholder.classList.add('hidden');
-            currentImageBase64 = dataUrl.split(',')[1];
-            currentImageType = file.type === 'image/png' ? 'png' : 'jpeg';
-        };
-        reader.readAsDataURL(file);
-    }
-
-    function clearImagePreview() {
-        currentImageBase64 = null;
-        currentImageType = null;
-        imageInput.value = '';
-        previewContainer.classList.add('hidden');
-        placeholder.classList.remove('hidden');
-    }
-}
-
-async function askGrok() {
-    const input = document.getElementById('grokInput');
-    const resultDiv = document.getElementById('grokResult');
-    const resultContent = document.getElementById('grokResultContent');
-    const message = input.value.trim();
-
-    if (!message && !currentImageBase64) {
-        input.focus();
-        return;
-    }
-
-    resultDiv.classList.remove('hidden');
-    resultContent.innerHTML = `
-        <div class="flex items-center gap-2 text-gray-400 text-sm">
-            <div class="loading" style="padding:6px;"></div>
-            <span>Grok AI 正在思考…</span>
-        </div>
-    `;
-
-    try {
-        let response;
-        if (currentImageBase64) {
-            response = await fetch('/api/grok', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message, image: currentImageBase64, imageType: currentImageType })
-            });
-        } else {
-            const params = new URLSearchParams();
-            params.append('message', message);
-            response = await fetch('/api/grok?' + params.toString());
-        }
-
-        const data = await response.json();
-
-        if (data.success) {
-            let content = data.content
-                .replace(/\n\n/g, '</p><p class="mb-2">')
-                .replace(/\n/g, '<br>')
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                .replace(/\*(.*?)\*/g, '<em>$1</em>');
-
-            resultContent.innerHTML = `
-                <div class="flex items-start gap-2">
-                    <div class="flex-shrink-0 w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center mt-0.5">
-                        <span class="text-white text-xs font-bold">G</span>
-                    </div>
-                    <div class="flex-1 min-w-0">
-                        <p class="mb-2">${content}</p>
-                        <div class="text-xs text-gray-400 mt-2">${data.model}</div>
-                    </div>
-                </div>
-            `;
-            input.value = '';
-        } else {
-            resultContent.innerHTML = `<div class="text-red-500 text-sm">${data.error || '请求失败，请稍后重试'}</div>`;
-        }
-    } catch (error) {
-        console.error('Grok API 错误:', error);
-        resultContent.innerHTML = `<div class="text-red-500 text-sm">网络错误，请检查连接</div>`;
-    }
-}
-
 // ========== 初始化 ==========
 document.addEventListener('DOMContentLoaded', function() {
     updateTime();
@@ -334,11 +210,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     loadCrypto();
     loadJinse();
-    initImageUpload();
 
-    document.getElementById('grokBtn').addEventListener('click', () => askGrok());
-    document.getElementById('grokInput').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') askGrok();
+    // Tab 切换绑定
+    document.querySelectorAll('.crypto-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => switchCryptoTab(btn.dataset.ctab));
     });
 
     // 加密货币每60秒刷新
