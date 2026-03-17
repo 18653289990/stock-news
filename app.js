@@ -1214,11 +1214,11 @@ async function getTradeRecommendation() {
 【建议】买入/卖出/持有/观望
 【理由】[你的分析理由，不超过3行]`;
         
-        // 调用 Grok API，指定使用 grok-4-latest 模型
+        // 调用 Grok API，指定使用 grok-4-latest 模型和确定性温度（0 = 完全一致的结果）
         const response = await fetch('/api/grok', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: prompt, model: 'grok-4-latest' })
+            body: JSON.stringify({ message: prompt, model: 'grok-4-latest', temperature: 0 })
         });
         
         const data = await response.json();
