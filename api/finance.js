@@ -12,7 +12,7 @@ export default async function handler(req, res) {
   }
   
   try {
-    const { api_name, params } = req.body;
+    const { api_name, params } = req.body || {};
     
     const response = await fetch('https://www.codebuddy.cn/v2/tool/financedata', {
       method: 'POST',
