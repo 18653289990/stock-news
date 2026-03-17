@@ -106,7 +106,85 @@ async function loadMarketIndex() {
         }
     }
     
-    document.getElementById('updateTime').textContent = '数据更新于: ' + updateTime();
+    document.getElementById('updateTime').textContent = '更新于 ' + new Date().toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    const footer = document.getElementById('footerUpdateTime');
+    if (footer) footer.textContent = '数据更新于: ' + new Date().toLocaleString('zh-CN');
+}
+
+// ========== 加密货币行情 ==========
+async function loadCrypto() {
+    const row = document.getElementById('cryptoRow');
+    try {
+        const res = await fetch('/api/crypto');
+        const data = await res.json();
+        if (!data.success || !data.items) throw new Error('数据异常');
+
+        row.innerHTML = data.items.map((c, i) => {
+            const pct = c.change24h;
+            const isUp = pct >= 0;
+            const pctClass = isUp ? 'stock-up' : 'stock-down';
+            const pctStr = pct !== null ? `${isUp ? '+' : ''}${pct.toFixed(2)}%` : '--';
+            const priceStr = c.price !== null
+                ? (c.price >= 1000 ? c.price.toLocaleString('en-US', {maximumFractionDigits: 0})
+                    : c.price >= 1 ? c.price.toFixed(2) : c.price.toFixed(4))
+                : '--';
+            const borderClass = i === 0 ? '' : 'pl-3';
+            return `
+                <div class="${borderClass}">
+                    <div class="text-xs text-gray-500 mb-0.5 font-medium">${c.symbol}</div>
+                    <div class="text-base font-bold tabular-nums">$${priceStr}</div>
+                    <div class="text-xs mt-0.5 <span class="${pctClass}">${pctStr}</span>"></div>
+                </div>`;
+        }).join('');
+
+        // 修正：单独渲染涨跌幅
+        row.innerHTML = data.items.map((c, i) => {
+            const pct = c.change24h;
+            const isUp = pct !== null && pct >= 0;
+            const pctClass = pct === null ? 'text-gray-400' : isUp ? 'stock-up' : 'stock-down';
+            const pctStr = pct !== null ? `${isUp ? '+' : ''}${pct.toFixed(2)}%` : '--';
+            const priceStr = c.price !== null
+                ? (c.price >= 1000 ? c.price.toLocaleString('en-US', {maximumFractionDigits: 0})
+                    : c.price >= 1 ? c.price.toFixed(2) : c.price.toFixed(4))
+                : '--';
+            const borderClass = i === 0 ? 'pr-3' : 'px-3';
+            return `<div class="${borderClass}">
+                <div class="text-xs text-gray-500 mb-0.5 font-medium">${c.symbol}</div>
+                <div class="text-sm font-bold tabular-nums leading-tight">$${priceStr}</div>
+                <div class="text-xs mt-0.5 ${pctClass}">${pctStr}</div>
+            </div>`;
+        }).join('');
+    } catch (e) {
+        row.innerHTML = '<div class="text-xs text-gray-400">加载失败</div>';
+        console.error('loadCrypto error:', e);
+    }
+}
+
+// ========== 金色财经快讯 ==========
+async function loadJinse() {
+    const list = document.getElementById('jinseList');
+    list.innerHTML = '<div class="py-3 text-xs text-gray-400 text-center loading"></div>';
+    try {
+        const res = await fetch('/api/jinse');
+        const data = await res.json();
+        if (!data.success || !data.items?.length) throw new Error('无数据');
+
+        list.innerHTML = data.items.map(item => {
+            const isImportant = item.grade >= 4;
+            const gradeClass = isImportant ? 'text-gray-800 font-medium' : 'text-gray-600';
+            const gradeTag = isImportant
+                ? '<span class="inline-block bg-orange-400 text-white text-xs px-1 py-0.5 rounded mr-1.5 leading-none align-middle">快讯</span>'
+                : '';
+            const timeStr = item.time ? new Date(item.time * 1000).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}) : '';
+            return `<div class="py-1.5 flex gap-2 items-baseline">
+                <span class="flex-shrink-0 text-xs text-gray-400 w-10 leading-relaxed">${timeStr}</span>
+                <p class="text-xs ${gradeClass} leading-relaxed">${gradeTag}${item.content}</p>
+            </div>`;
+        }).join('');
+    } catch (e) {
+        list.innerHTML = '<div class="py-3 text-xs text-gray-400 text-center">加载失败，点右上角刷新重试</div>';
+        console.error('loadJinse error:', e);
+    }
 }
 
 // ========== 涨跌幅排行 ==========
@@ -501,6 +579,8 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(updateTime, 1000);
 
     loadMarketIndex();
+    loadCrypto();
+    loadJinse();
     loadRanking('up');
 
     // 初始化图片上传功能
@@ -526,11 +606,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     setInterval(() => {
         loadMarketIndex();
+        loadCrypto();
         const activeTab = document.querySelector('.tab-active').dataset.tab;
         if (activeTab === 'ranking') {
             loadRanking(currentRankType);
         }
     }, 60000);
+
+    // 金色快讯每5分钟刷新
+    setInterval(loadJinse, 5 * 60 * 1000);
 
     // 初始化认证状态
     initAuth();

@@ -194,23 +194,63 @@
 
     <!-- Main Content -->
     <main class="max-w-7xl mx-auto px-4 py-6">
-        <!-- Market Overview -->
-        <section class="mb-8">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="card p-4">
-                    <div class="text-sm text-gray-500 mb-1">上证指数</div>
-                    <div class="text-2xl font-bold" id="shIndex">--</div>
-                    <div class="text-sm" id="shChange">--</div>
+
+        <!-- Market Overview：股票指数 + 加密货币 -->
+        <section class="mb-4">
+            <!-- 行情总览标题 -->
+            <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-medium text-gray-500 uppercase tracking-wide">市场行情</span>
+                    <span id="updateTime" class="text-xs text-gray-400"></span>
                 </div>
-                <div class="card p-4">
-                    <div class="text-sm text-gray-500 mb-1">深证成指</div>
-                    <div class="text-2xl font-bold" id="szIndex">--</div>
-                    <div class="text-sm" id="szChange">--</div>
+            </div>
+            <!-- 两组数据横排 -->
+            <div class="grid grid-cols-2 gap-3">
+                <!-- 左：A股三大指数 -->
+                <div class="card px-4 py-3">
+                    <div class="text-xs text-gray-400 mb-2 font-medium">🇨🇳 A股指数</div>
+                    <div class="grid grid-cols-3 gap-x-4 divide-x divide-gray-100">
+                        <div class="pr-4">
+                            <div class="text-xs text-gray-500 mb-0.5">上证指数</div>
+                            <div class="text-base font-bold tabular-nums" id="shIndex">--</div>
+                            <div class="text-xs mt-0.5" id="shChange">--</div>
+                        </div>
+                        <div class="px-4">
+                            <div class="text-xs text-gray-500 mb-0.5">深证成指</div>
+                            <div class="text-base font-bold tabular-nums" id="szIndex">--</div>
+                            <div class="text-xs mt-0.5" id="szChange">--</div>
+                        </div>
+                        <div class="pl-4">
+                            <div class="text-xs text-gray-500 mb-0.5">创业板指</div>
+                            <div class="text-base font-bold tabular-nums" id="cyIndex">--</div>
+                            <div class="text-xs mt-0.5" id="cyChange">--</div>
+                        </div>
+                    </div>
                 </div>
-                <div class="card p-4">
-                    <div class="text-sm text-gray-500 mb-1">创业板指</div>
-                    <div class="text-2xl font-bold" id="cyIndex">--</div>
-                    <div class="text-sm" id="cyChange">--</div>
+                <!-- 右：加密货币 -->
+                <div class="card px-4 py-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="text-xs text-gray-400 font-medium">₿ 加密货币 <span class="text-gray-300">· 实时</span></div>
+                    </div>
+                    <div class="grid grid-cols-4 gap-x-3 divide-x divide-gray-100" id="cryptoRow">
+                        <div class="pr-3"><div class="text-xs text-gray-400">加载中…</div></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 金色财经快讯 -->
+        <section class="mb-4">
+            <div class="card px-4 py-3">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-2">
+                        <span class="inline-block w-1.5 h-4 bg-yellow-400 rounded-sm"></span>
+                        <span class="text-sm font-semibold text-gray-800">金色财经 · 快讯</span>
+                    </div>
+                    <button onclick="loadJinse()" class="text-xs text-gray-400 hover:text-blue-500 transition-colors">刷新</button>
+                </div>
+                <div id="jinseList" class="divide-y divide-gray-50 max-h-52 overflow-y-auto">
+                    <div class="py-2 text-xs text-gray-400 text-center loading"></div>
                 </div>
             </div>
         </section>
@@ -397,8 +437,7 @@
     <!-- Footer -->
     <footer class="mt-12 py-6 border-t border-gray-200 bg-white">
         <div class="max-w-7xl mx-auto px-4 text-center text-sm text-gray-500">
-            数据仅供参考，不构成投资建议 | 
-            <span id="updateTime">数据加载中...</span>
+            数据仅供参考，不构成投资建议 | <span id="footerUpdateTime"></span>
         </div>
     </footer>
 
