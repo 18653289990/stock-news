@@ -578,6 +578,15 @@ function switchTab(tabName) {
         const targetPanel = document.getElementById(`${tabName}Tab`);
         if (targetPanel) {
             targetPanel.classList.remove('hidden');
+            // 如果是推荐操作标签，自动聚焦搜索框
+            if (tabName === 'recommendation') {
+                setTimeout(() => {
+                    const recInput = document.getElementById('recInput');
+                    if (recInput) {
+                        recInput.focus();
+                    }
+                }, 100);
+            }
         } else {
             console.warn(`Tab panel not found for: ${tabName}Tab`);
             return;
@@ -1185,6 +1194,10 @@ async function getTradeRecommendation() {
         return;
     }
     
+    // 获取持仓状态和交易周期
+    const holdingStatus = document.querySelector('input[name="holdingStatus"]:checked').value;
+    const timeframe = document.getElementById('timeframe').value;
+    
     // 显示加载状态
     resultDiv.innerHTML = `
         <div class="flex items-center justify-center gap-2">
@@ -1207,18 +1220,22 @@ async function getTradeRecommendation() {
             // 市场数据获取失败，继续使用原始输入
         }
         
-        // 准备 Grok 提示词
-        const prompt = `我输入股票代码是：${input}。请你分析完直接告诉我，如果是你，你今天的操作是买入，卖出，还是继续持有或观望。
+        // 准备 Grok 提示词，融入持仓状态和交易周期
+        const prompt = `我输入的股票代码是：${input}。
+我的持仓状态是：${holdingStatus}
+我的交易周期是：${timeframe}
+
+请你分析这只股票，然后直接告诉我，如果是你（考虑我的持仓状态和${timeframe}交易周期），你今天的操作是买入，卖出，还是继续持有或观望。
 
 请用以下格式回答：
 【建议】买入/卖出/持有/观望
 【理由】[你的分析理由，不超过3行]`;
         
-        // 调用 Grok API，指定使用 grok-4.2 模型
+        // 调用 Grok API，指定使用 grok-4-latest 模型
         const response = await fetch('/api/grok', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: prompt, model: 'grok-4.2' })
+            body: JSON.stringify({ message: prompt, model: 'grok-4-latest' })
         });
         
         const data = await response.json();
@@ -1236,8 +1253,21 @@ async function getTradeRecommendation() {
             resultDiv.innerHTML = `
                 <div class="space-y-4 px-2 md:px-0">
                     <div class="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-3 md:p-4 border border-blue-100">
-                        <div class="text-sm text-gray-600 mb-2">📊 股票分析对象</div>
-                        <div class="text-lg font-bold text-gray-900 truncate">${input}</div>
+                        <div class="text-sm text-gray-600 mb-2">📊 分析参数</div>
+                        <div class="flex flex-wrap gap-3">
+                            <div class="text-sm">
+                                <span class="text-gray-500">股票：</span>
+                                <span class="font-bold text-gray-900">${input}</span>
+                            </div>
+                            <div class="text-sm">
+                                <span class="text-gray-500">持仓：</span>
+                                <span class="font-bold text-gray-900">${holdingStatus}</span>
+                            </div>
+                            <div class="text-sm">
+                                <span class="text-gray-500">周期：</span>
+                                <span class="font-bold text-gray-900">${timeframe}</span>
+                            </div>
+                        </div>
                     </div>
                     <div class="bg-white rounded-lg p-3 md:p-4 border border-gray-200">
                         <div class="flex items-start gap-2 md:gap-3">

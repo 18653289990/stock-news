@@ -272,6 +272,34 @@
                             </button>
                         </div>
                         <p class="text-xs text-gray-500">Grok AI 将分析该股票，为您提供「买入/卖出/持有/观望」建议</p>
+                        
+                        <!-- 持仓状态选择 -->
+                        <div class="grid grid-cols-2 gap-2 pt-2">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1.5">您的持仓状态</label>
+                                <div class="flex gap-1.5">
+                                    <label class="flex items-center gap-1.5 text-sm cursor-pointer">
+                                        <input type="radio" name="holdingStatus" value="未持有" checked class="w-3 h-3">
+                                        <span>未持有</span>
+                                    </label>
+                                    <label class="flex items-center gap-1.5 text-sm cursor-pointer">
+                                        <input type="radio" name="holdingStatus" value="已持有" class="w-3 h-3">
+                                        <span>已持有</span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <!-- 时间线段选择 -->
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1.5">交易周期</label>
+                                <select id="timeframe" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="超短线">超短线（日内）</option>
+                                    <option value="短线">短线（1-5天）</option>
+                                    <option value="中线" selected>中线（1-3月）</option>
+                                    <option value="长线">长线（3月+）</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div id="recResult" class="card p-3 md:p-6">
